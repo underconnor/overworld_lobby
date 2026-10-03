@@ -69,14 +69,16 @@ public final class WorldController implements Listener, AutoCloseable {
 
     private void apply(World world, Settings current) {
         WorldState state = states.computeIfAbsent(world.getUID(), id -> new WorldState(world));
+        Settings.TimeSettings time = current.timeFor(world);
+        Settings.WeatherSettings weather = current.weatherFor(world);
         changing = true;
         try {
-            if (current.time().enabled() && !world.isFixedTime() && !state.timeUnsupported) {
+            if (time.enabled() && !world.isFixedTime() && !state.timeUnsupported) {
                 boolean firstLock = state.time == null;
                 if (firstLock) state.time = new TimeState(world.getFullTime(), rules.read(world, ManagedRule.TIME));
                 try {
                     // The first write probes custom dimensions whose missing clock has no public API predicate.
-                    if (firstLock || world.getTime() != current.time().ticks()) world.setTime(current.time().ticks());
+                    if (firstLock || world.getTime() != time.ticks()) world.setTime(time.ticks());
                     rules.write(world, ManagedRule.TIME, false);
                 } catch (IllegalArgumentException unsupportedClock) {
                     restoreTime(state);
@@ -84,13 +86,13 @@ public final class WorldController implements Listener, AutoCloseable {
                 }
             } else restoreTime(state);
 
-            if (current.weather().enabled()) {
+            if (weather.enabled()) {
                 if (state.weather == null) state.weather = new WeatherState(world.hasStorm(), world.isThundering(),
                     world.getWeatherDuration(), world.getThunderDuration(), world.getClearWeatherDuration(),
                     rules.read(world, ManagedRule.WEATHER));
                 rules.write(world, ManagedRule.WEATHER, false);
-                boolean rain = current.weather().kind() != Settings.WeatherKind.CLEAR;
-                boolean thunder = current.weather().kind() == Settings.WeatherKind.THUNDER;
+                boolean rain = weather.kind() != Settings.WeatherKind.CLEAR;
+                boolean thunder = weather.kind() == Settings.WeatherKind.THUNDER;
                 if (world.hasStorm() != rain) world.setStorm(rain);
                 if (world.isThundering() != thunder) world.setThundering(thunder);
                 world.setWeatherDuration(Integer.MAX_VALUE);
@@ -125,23 +127,25 @@ public final class WorldController implements Listener, AutoCloseable {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onWeatherChange(WeatherChangeEvent event) {
         Settings current = settings.get();
-        if (!changing && current.protects(event.getWorld()) && current.weather().enabled()
-            && event.toWeatherState() != (current.weather().kind() != Settings.WeatherKind.CLEAR))
+        Settings.WeatherSettings weather = current.weatherFor(event.getWorld());
+        if (!changing && current.protects(event.getWorld()) && weather.enabled()
+            && event.toWeatherState() != (weather.kind() != Settings.WeatherKind.CLEAR))
             event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onThunderChange(ThunderChangeEvent event) {
         Settings current = settings.get();
-        if (!changing && current.protects(event.getWorld()) && current.weather().enabled()
-            && event.toThunderState() != (current.weather().kind() == Settings.WeatherKind.THUNDER))
+        Settings.WeatherSettings weather = current.weatherFor(event.getWorld());
+        if (!changing && current.protects(event.getWorld()) && weather.enabled()
+            && event.toThunderState() != (weather.kind() == Settings.WeatherKind.THUNDER))
             event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTimeSkip(TimeSkipEvent event) {
         Settings current = settings.get();
-        if (!changing && current.protects(event.getWorld()) && current.time().enabled()) event.setCancelled(true);
+        if (!changing && current.protects(event.getWorld()) && current.timeFor(event.getWorld()).enabled()) event.setCancelled(true);
     }
 
     private void restore(WorldState state) {

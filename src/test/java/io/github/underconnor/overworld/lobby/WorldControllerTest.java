@@ -185,4 +185,94 @@ class WorldControllerTest {
         assertDoesNotThrow(controller::close);
         assertTrue(rules.get(WorldController.ManagedRule.SPAWNS));
     }
+
+    @Test void perWorldTimeWeatherIsolationOffAndDefaultRestoreOnlyTheirOwnState() {
+        World second = mock(World.class);
+        when(second.getName()).thenReturn("other");
+        when(second.getUID()).thenReturn(UUID.randomUUID());
+        AtomicLong secondTime = new AtomicLong(76_000);
+        AtomicBoolean secondStorm = new AtomicBoolean(true);
+        AtomicBoolean secondThunder = new AtomicBoolean(false);
+        when(second.getFullTime()).thenAnswer(call -> secondTime.get());
+        when(second.getTime()).thenAnswer(call -> Math.floorMod(secondTime.get(), 24_000L));
+        doAnswer(call -> { secondTime.set(secondTime.get() - Math.floorMod(secondTime.get(), 24_000L) + call.<Long>getArgument(0)); return null; }).when(second).setTime(anyLong());
+        doAnswer(call -> { secondTime.set(call.getArgument(0)); return null; }).when(second).setFullTime(anyLong());
+        when(second.hasStorm()).thenAnswer(call -> secondStorm.get());
+        when(second.isThundering()).thenAnswer(call -> secondThunder.get());
+        doAnswer(call -> { secondStorm.set(call.getArgument(0)); return null; }).when(second).setStorm(anyBoolean());
+        doAnswer(call -> { secondThunder.set(call.getArgument(0)); return null; }).when(second).setThundering(anyBoolean());
+        EnumMap<WorldController.ManagedRule, Boolean> secondRules = new EnumMap<>(WorldController.ManagedRule.class);
+        for (WorldController.ManagedRule rule : WorldController.ManagedRule.values()) secondRules.put(rule, true);
+        config.set("worlds", List.of("lobby", "other"));
+        config.set("world-settings.lobby.time.ticks", 18_000);
+        config.set("world-settings.lobby.weather.kind", "THUNDER");
+        when(server.getWorlds()).thenReturn(List.of(world, second));
+        controller = new WorldController(plugin, () -> Settings.load(config), new WorldController.WorldRules() {
+            @Override public Boolean read(World current, WorldController.ManagedRule rule) { return (current == world ? rules : secondRules).get(rule); }
+            @Override public void write(World current, WorldController.ManagedRule rule, boolean value) { (current == world ? rules : secondRules).put(rule, value); }
+        });
+        controller.refresh();
+        assertEquals(18_000, world.getTime());
+        assertTrue(storm.get());
+        assertTrue(thunder.get());
+        assertEquals(6000, second.getTime());
+        assertFalse(secondStorm.get());
+        assertFalse(secondThunder.get());
+        config.set("world-settings.lobby.time.enabled", false);
+        config.set("world-settings.lobby.weather.enabled", false);
+        controller.refresh();
+        assertEquals(61_000, time.get());
+        assertTrue(rules.get(WorldController.ManagedRule.TIME));
+        assertFalse(rules.get(WorldController.ManagedRule.WEATHER));
+        assertEquals(123, rainDuration.get());
+        assertEquals(6000, second.getTime());
+        assertFalse(secondRules.get(WorldController.ManagedRule.TIME));
+        assertFalse(secondRules.get(WorldController.ManagedRule.WEATHER));
+        assertFalse(secondStorm.get());
+        config.set("world-settings.lobby", null);
+        controller.refresh();
+        assertEquals(6000, world.getTime());
+        assertFalse(storm.get());
+        assertFalse(thunder.get());
+        assertEquals(6000, second.getTime());
+        controller.close();
+        assertEquals(61_000, time.get());
+        assertEquals(76_000, secondTime.get());
+        assertTrue(storm.get());
+        assertTrue(secondStorm.get());
+        assertTrue(secondRules.get(WorldController.ManagedRule.TIME));
+        assertTrue(secondRules.get(WorldController.ManagedRule.WEATHER));
+    }
+
+    @Test void timeAndWeatherEventGuardsUseEachWorldOverrideWithoutExpandingScope() {
+        World second = mock(World.class);
+        when(second.getName()).thenReturn("other");
+        config.set("worlds", List.of("lobby", "other"));
+        config.set("world-settings.lobby.time.enabled", false);
+        config.set("world-settings.lobby.weather.kind", "RAIN");
+        config.set("world-settings.other.weather.kind", "THUNDER");
+        TimeSkipEvent lobbyTime = new TimeSkipEvent(world, ClockTimeSkipEvent.SkipReason.CUSTOM, 100);
+        TimeSkipEvent otherTime = new TimeSkipEvent(second, ClockTimeSkipEvent.SkipReason.CUSTOM, 100);
+        controller.onTimeSkip(lobbyTime);
+        controller.onTimeSkip(otherTime);
+        assertFalse(lobbyTime.isCancelled());
+        assertTrue(otherTime.isCancelled());
+        ThunderChangeEvent lobbyThunder = new ThunderChangeEvent(world, true);
+        ThunderChangeEvent otherThunder = new ThunderChangeEvent(second, true);
+        controller.onThunderChange(lobbyThunder);
+        controller.onThunderChange(otherThunder);
+        assertTrue(lobbyThunder.isCancelled());
+        assertFalse(otherThunder.isCancelled());
+        WeatherChangeEvent lobbyRain = new WeatherChangeEvent(world, true);
+        controller.onWeatherChange(lobbyRain);
+        assertFalse(lobbyRain.isCancelled());
+        config.set("world-settings.lobby.weather.enabled", false);
+        WeatherChangeEvent naturalClear = new WeatherChangeEvent(world, false);
+        controller.onWeatherChange(naturalClear);
+        assertFalse(naturalClear.isCancelled());
+        config.set("worlds", List.of("lobby"));
+        TimeSkipEvent excluded = new TimeSkipEvent(second, ClockTimeSkipEvent.SkipReason.CUSTOM, 100);
+        controller.onTimeSkip(excluded);
+        assertFalse(excluded.isCancelled());
+    }
 }

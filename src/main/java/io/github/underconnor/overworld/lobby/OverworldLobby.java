@@ -19,6 +19,7 @@ public final class OverworldLobby extends JavaPlugin {
     private WorldController worlds;
     private PlayerController players;
     private SpawnController spawn;
+    private WorldSettingsCommands worldCommands;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -37,6 +38,7 @@ public final class OverworldLobby extends JavaPlugin {
         worlds = new WorldController(this, () -> settings);
         players = new PlayerController(this, policy);
         spawn = new SpawnController(this, policy);
+        worldCommands = new WorldSettingsCommands(this, () -> settings, this::reloadSettings);
         getServer().getPluginManager().registerEvents(new ProtectionListener(policy, messages), this);
         getServer().getPluginManager().registerEvents(new EnvironmentListener(policy), this);
         Objects.requireNonNull(getCommand("lobby")).setExecutor(this);
@@ -57,8 +59,20 @@ public final class OverworldLobby extends JavaPlugin {
 
     private LoadedSettings readSettings() throws Exception {
         YamlConfiguration candidate = new YamlConfiguration();
+        candidate.options().pathSeparator('\0');
         candidate.load(new File(getDataFolder(), "config.yml"));
+        candidate.options().pathSeparator('.');
         return new LoadedSettings(Settings.load(candidate), DenialMessageSettings.load(candidate));
+    }
+
+    private void reloadSettings() throws Exception {
+        LoadedSettings candidate = readSettings();
+        settings = candidate.protection();
+        messageSettings = candidate.messages();
+        messages.close();
+        worlds.refresh();
+        players.refresh();
+        spawn.refresh();
     }
 
     private record LoadedSettings(Settings protection, DenialMessageSettings messages) { }
@@ -76,6 +90,7 @@ public final class OverworldLobby extends JavaPlugin {
             }
             return true;
         }
+        if (worldCommands.handle(sender, label, args)) return true;
         if (args.length == 1 && args[0].equalsIgnoreCase("status")) {
             if (!sender.isOp() && !sender.hasPermission("overworld.lobby.admin")) {
                 sender.sendMessage("§c로비 상태를 확인할 권한이 없습니다.");
@@ -101,13 +116,7 @@ public final class OverworldLobby extends JavaPlugin {
                 return true;
             }
             try {
-                LoadedSettings candidate = readSettings();
-                settings = candidate.protection();
-                messageSettings = candidate.messages();
-                messages.close();
-                worlds.refresh();
-                players.refresh();
-                spawn.refresh();
+                reloadSettings();
                 sender.sendMessage("§a로비 설정을 다시 불러왔습니다.");
             } catch (Exception ex) {
                 sender.sendMessage("§c설정을 적용하지 못했습니다: " + ex.getMessage());
@@ -139,6 +148,8 @@ public final class OverworldLobby extends JavaPlugin {
         }
         sender.sendMessage("§e/" + label + " fly [on|off] — 로비 비행 켜기·끄기");
         if (sender.isOp() || sender.hasPermission("overworld.lobby.admin")) {
+            sender.sendMessage("§e/" + label + " time <day|night|noon|midnight|0..23999|off|default> [월드] — 월드별 시간");
+            sender.sendMessage("§e/" + label + " weather <clear|rain|thunder|off|default> [월드] — 월드별 날씨");
             sender.sendMessage("§e/" + label + " reload — 설정 다시 불러오기");
             sender.sendMessage("§e/" + label + " status — 접속자의 OP·우회·게임 모드 집계");
         }
@@ -147,8 +158,10 @@ public final class OverworldLobby extends JavaPlugin {
 
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) return (sender.isOp() || sender.hasPermission("overworld.lobby.admin")
-            ? List.of("fly", "reload", "status") : List.of("fly")).stream()
+            ? List.of("fly", "time", "weather", "reload", "status") : List.of("fly")).stream()
             .filter(value -> value.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        List<String> worldSuggestions = worldCommands.complete(sender, args);
+        if (worldSuggestions != null) return worldSuggestions;
         if (args.length == 2 && args[0].equalsIgnoreCase("fly"))
             return Arrays.stream(new String[]{"on", "off"}).filter(value -> value.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
         return List.of();

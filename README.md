@@ -53,11 +53,25 @@
 | 명령어 | 권한 | 설명 |
 | --- | --- | --- |
 | `/lobby fly [on\|off]` | `overworld.lobby.fly` | 보호 월드에서 비행 켜기·끄기. 인수 없이 토글 |
+| `/lobby time <day\|night\|noon\|midnight\|0..23999\|off\|default> [월드]` | OP 또는 `overworld.lobby.admin` | 월드별 시간을 바로 적용하고 저장 |
+| `/lobby weather <clear\|rain\|thunder\|off\|default> [월드]` | OP 또는 `overworld.lobby.admin` | 월드별 날씨를 바로 적용하고 저장 |
 | `/lobby reload` | `overworld.lobby.admin` | 파일을 검증한 뒤 설정 다시 적용 |
 | `/lobby status` | `overworld.lobby.admin` | 현재 접속자의 OP·전체 우회·게임 모드 적용 현황 확인 |
 | `/spawn` | `overworld.lobby.spawn` | 지정한 로비 스폰으로 이동 |
 
 `/overworldlobby` 별칭을 지원합니다. 명령어가 충돌하면 `/overworldlobby:lobby`, `/overworldlobby:spawn`을 사용하세요. `fly`와 `spawn`은 기본으로 모두에게 허용되고, `admin`은 기본 OP 권한입니다. 일반 사용자는 설정에서 비행을 꺼두면 `fly` 권한만으로 켤 수 없습니다. OP·전체 우회 사용자는 설정과 `fly` 권한에 관계없이 비행 명령을 사용할 수 있습니다.
+
+게임 안에서 월드를 생략하면 현재 있는 월드를 설정합니다. 콘솔에서는 월드 이름을 반드시 지정합니다. 보호 대상으로 이미 로드된 월드만 설정하며, 다른 월드의 시간·날씨는 유지합니다. `off`는 그 월드의 해당 고정을 해제해 원래 진행 상태를 복원하고, `default`는 해당 월드의 예외를 지워 공통 설정을 다시 따릅니다. 시간과 날씨는 각각 독립적으로 설정합니다. 변경은 즉시 적용하고 `config.yml`에 저장하므로 서버 재시작 후에도 유지됩니다.
+
+```text
+/lobby time day lobby
+/lobby time 18000 lobby
+/lobby weather rain lobby
+/lobby time off lobby
+/lobby weather default lobby
+```
+
+`day`는 1000틱, `noon`은 6000틱, `night`는 13000틱, `midnight`는 18000틱입니다. 네더·엔드 등 시계가 고정된 차원에는 시간을 새로 고정할 수 없으며, 네더·엔드에는 날씨를 고정할 수 없습니다. 그 월드의 `off`·`default` 설정은 사용할 수 있습니다.
 
 ## LuckPerms 권한 예외
 
@@ -122,6 +136,17 @@ time:
 weather:
   enabled: true
   kind: CLEAR # CLEAR, RAIN, THUNDER
+world-settings:
+  lobby:
+    time:
+      enabled: true
+      ticks: 6000
+    weather:
+      enabled: true
+      kind: CLEAR
+  another-world:
+    time:
+      enabled: false # 이 월드의 시간은 자연 진행
 spawn:
   enabled: true
   world: '' # 보호 대상인 첫 번째 로드된 월드. 여러 월드는 이름을 명시하세요.
@@ -135,6 +160,8 @@ spawn:
   void-rescue: true
 prevent-natural-spawns: true
 ```
+
+최상위 `time`·`weather`는 공통 기본값이고, `world-settings`는 월드 이름별 예외입니다. 예외에서 빠진 항목은 공통 값을 따릅니다. 이 목록은 보호 대상 `worlds`를 늘리거나 월드를 새로 생성하지 않습니다. 기존 설정에 `world-settings`가 없어도 이전처럼 공통 설정을 적용합니다.
 
 `protection`과 `environment` 아래의 각 키는 `true`일 때 차단합니다. `protection.containers`만 기본 `false`입니다. `allowed-containers` 목록의 상자만 일반 블록 조작 제한에서 예외로 취급합니다. 이 목록을 비우면 예외가 사라집니다. 제작대·화로 같은 블록을 목록에 추가할 수는 없습니다.
 

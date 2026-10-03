@@ -12,15 +12,15 @@ commands:
     usage: /spawn
     permission: overworld.lobby.spawn
   lobby:
-    description: 로비 비행과 보호 설정을 관리합니다.
-    usage: /lobby [fly [on|off]|reload|status]
+    description: 로비 비행, 월드별 시간·날씨와 보호 설정을 관리합니다.
+    usage: /lobby [fly [on|off]|time <값> [월드]|weather <값> [월드]|reload|status]
     aliases: [overworldlobby]
 permissions:
   overworld.lobby.spawn:
     description: 로비 스폰으로 이동
     default: true
   overworld.lobby.admin:
-    description: 설정 다시 불러오기
+    description: 월드별 시간·날씨 설정, 설정 다시 불러오기와 상태 조회
     default: op
   overworld.lobby.fly:
     description: 설정에서 비행을 허용한 로비에서 비행하기
