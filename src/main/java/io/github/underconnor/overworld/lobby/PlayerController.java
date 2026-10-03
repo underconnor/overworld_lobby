@@ -45,8 +45,7 @@ public final class PlayerController implements Listener, AutoCloseable {
     }
 
     private boolean managed(Player player) {
-        return policy.protects(player.getWorld()) && !player.hasPermission("overworld.lobby.bypass")
-            && !player.hasPermission("overworld.lobby.bypass.mode");
+        return policy.protects(player.getWorld()) && !player.hasPermission("overworld.lobby.bypass.mode");
     }
 
     private boolean canFly(Player player) {

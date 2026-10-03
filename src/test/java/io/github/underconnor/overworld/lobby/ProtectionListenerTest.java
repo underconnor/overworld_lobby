@@ -42,6 +42,7 @@ import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerPickupArrowEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.BeforeEach;
@@ -496,5 +497,138 @@ class ProtectionListenerTest {
         when(player.hasPermission(Action.ITEM_USE.permission())).thenReturn(true);
         listener.onPotionCloud(event);
         assertEquals(java.util.List.of(player, mob), targets);
+    }
+
+    @Test void deniedBreakNotifiesActorButPermissionAndPriorCancellationRemainSilent() {
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        BlockBreakEvent denied = new BlockBreakEvent(block(Material.STONE), player);
+        feedback.onBreak(denied);
+        verify(messages).send(player, Action.BLOCK_BREAK);
+        clearInvocations(messages);
+        BlockBreakEvent alreadyCancelled = new BlockBreakEvent(block(Material.STONE), player);
+        alreadyCancelled.setCancelled(true);
+        feedback.onBreak(alreadyCancelled);
+        when(player.hasPermission(Action.BLOCK_BREAK.permission())).thenReturn(true);
+        feedback.onBreak(new BlockBreakEvent(block(Material.STONE), player));
+        verifyNoInteractions(messages);
+    }
+
+    @Test void blockedDoorGetsOneBlockMessageWhenHeldItemIsAlsoDenied() {
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        ItemStack bucket = mock(ItemStack.class);
+        when(bucket.getType()).thenReturn(Material.WATER_BUCKET);
+        var event = interaction(org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK, Material.OAK_DOOR, EquipmentSlot.HAND, bucket);
+        feedback.onInteract(event);
+        verify(messages).send(player, Action.INTERACT);
+        verifyNoMoreInteractions(messages);
+        assertEquals(Result.DENY, event.useInteractedBlock());
+        assertEquals(Result.DENY, event.useItemInHand());
+    }
+
+    @Test void allowedChestOpeningDoesNotComplainAboutBlockedHeldItem() {
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        Material material = mock(Material.class);
+        when(material.name()).thenReturn("STONE");
+        when(material.isBlock()).thenReturn(true);
+        ItemStack heldBlock = mock(ItemStack.class);
+        when(heldBlock.getType()).thenReturn(material);
+        var chest = interaction(org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK, Material.CHEST, EquipmentSlot.HAND, heldBlock);
+        feedback.onInteract(chest);
+        assertNotEquals(Result.DENY, chest.useInteractedBlock());
+        assertEquals(Result.DENY, chest.useItemInHand());
+        verifyNoInteractions(messages);
+    }
+
+    @Test void sneakPlacementAgainstChestStillExplainsDeniedBlockPlacement() {
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        Material material = mock(Material.class);
+        when(material.name()).thenReturn("STONE");
+        when(material.isBlock()).thenReturn(true);
+        ItemStack heldBlock = mock(ItemStack.class);
+        when(heldBlock.getType()).thenReturn(material);
+        when(player.isSneaking()).thenReturn(true);
+        var chest = interaction(org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK, Material.CHEST, EquipmentSlot.HAND, heldBlock);
+        feedback.onInteract(chest);
+        verify(messages).send(player, Action.BLOCK_PLACE);
+    }
+
+    @Test void physicalTramplingEmptyAirAndPriorChannelDenialsRemainSilent() {
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        var physical = interaction(org.bukkit.event.block.Action.PHYSICAL, Material.FARMLAND, EquipmentSlot.HAND, null);
+        feedback.onInteract(physical);
+        var emptyAir = interaction(org.bukkit.event.block.Action.RIGHT_CLICK_AIR, null, EquipmentSlot.HAND, null);
+        feedback.onInteract(emptyAir);
+        var deniedBefore = interaction(org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK, Material.OAK_DOOR, EquipmentSlot.HAND, null);
+        deniedBefore.setUseInteractedBlock(Result.DENY);
+        deniedBefore.setUseItemInHand(Result.DENY);
+        feedback.onInteract(deniedBefore);
+        verifyNoInteractions(messages);
+    }
+
+    @Test void actualItemUseInAirGetsFeedbackWhenItsChannelWasStillAvailable() {
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        Material material = mock(Material.class);
+        when(material.name()).thenReturn("COOKIE");
+        ItemStack item = mock(ItemStack.class);
+        when(item.getType()).thenReturn(material);
+        var event = interaction(org.bukkit.event.block.Action.RIGHT_CLICK_AIR, null, EquipmentSlot.HAND, item);
+        event.setUseItemInHand(Result.DEFAULT);
+        feedback.onInteract(event);
+        assertEquals(Result.DENY, event.useItemInHand());
+        verify(messages).send(player, Action.ITEM_USE);
+    }
+
+    @Test void configuredChestDenialUsesItsOwnMessage() {
+        var actions = protections();
+        actions.add(Action.CONTAINERS);
+        settings = settings(Set.of("lobby"), actions);
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        feedback.onInteract(interaction(org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK, Material.CHEST, EquipmentSlot.HAND, null));
+        verify(messages).send(player, Action.CONTAINERS);
+    }
+
+    @Test void attackFeedbackTargetsOnlyAttackerAndPassiveDamageHungerStaySilent() {
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        Player victim = mock(Player.class);
+        when(victim.getWorld()).thenReturn(lobby);
+        feedback.onDamage(hit(player, victim));
+        verify(messages).send(player, Action.PVP);
+        verify(messages, never()).send(eq(victim), any());
+        clearInvocations(messages);
+        EntityDamageEvent falling = mock(EntityDamageEvent.class);
+        when(falling.getEntity()).thenReturn(player);
+        feedback.onDamage(falling);
+        feedback.onHunger(new FoodLevelChangeEvent(player, 19, null));
+        feedback.onExhaustion(new EntityExhaustionEvent(player, EntityExhaustionEvent.ExhaustionReason.SPRINT, 0.1f));
+        verifyNoInteractions(messages);
+    }
+
+    @Test void realMessengerCombinesMainHandOffHandAndOtherActionsIntoOneCooldown() {
+        when(player.getUniqueId()).thenReturn(java.util.UUID.randomUUID());
+        DenialMessages messages = new DenialMessages(DenialMessageSettings::defaults, () -> 0L);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        feedback.onInteract(interaction(org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK, Material.OAK_DOOR, EquipmentSlot.HAND, null));
+        feedback.onInteract(interaction(org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK, Material.OAK_DOOR, EquipmentSlot.OFF_HAND, null));
+        feedback.onBreak(new BlockBreakEvent(block(Material.STONE), player));
+        verify(player, times(1)).sendMessage(any(net.kyori.adventure.text.Component.class));
+    }
+
+    @Test void quitClearsOnlyLeavingPlayersFeedbackState() {
+        java.util.UUID playerId = java.util.UUID.randomUUID();
+        when(player.getUniqueId()).thenReturn(playerId);
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        PlayerQuitEvent quit = mock(PlayerQuitEvent.class);
+        when(quit.getPlayer()).thenReturn(player);
+        feedback.onQuit(quit);
+        verify(messages).clear(playerId);
     }
 }

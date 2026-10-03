@@ -13,23 +13,30 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class OverworldLobby extends JavaPlugin {
     private Settings settings;
+    private DenialMessageSettings messageSettings;
+    private DenialMessages messages;
     private WorldController worlds;
     private PlayerController players;
     private SpawnController spawn;
 
     @Override public void onEnable() {
         saveDefaultConfig();
-        try { settings = readSettings(); }
+        try {
+            LoadedSettings candidate = readSettings();
+            settings = candidate.protection();
+            messageSettings = candidate.messages();
+        }
         catch (Exception ex) {
             getLogger().severe("설정을 읽지 못했습니다: " + ex.getMessage());
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
         ProtectionPolicy policy = new ProtectionPolicy(() -> settings);
+        messages = new DenialMessages(() -> messageSettings);
         worlds = new WorldController(this, () -> settings);
         players = new PlayerController(this, policy);
         spawn = new SpawnController(this, policy);
-        getServer().getPluginManager().registerEvents(new ProtectionListener(policy), this);
+        getServer().getPluginManager().registerEvents(new ProtectionListener(policy, messages), this);
         getServer().getPluginManager().registerEvents(new EnvironmentListener(policy), this);
         Objects.requireNonNull(getCommand("lobby")).setExecutor(this);
         Objects.requireNonNull(getCommand("lobby")).setTabCompleter(this);
@@ -44,13 +51,16 @@ public final class OverworldLobby extends JavaPlugin {
         if (spawn != null) spawn.close();
         if (players != null) players.close();
         if (worlds != null) worlds.close();
+        if (messages != null) messages.close();
     }
 
-    private Settings readSettings() throws Exception {
+    private LoadedSettings readSettings() throws Exception {
         YamlConfiguration candidate = new YamlConfiguration();
         candidate.load(new File(getDataFolder(), "config.yml"));
-        return Settings.load(candidate);
+        return new LoadedSettings(Settings.load(candidate), DenialMessageSettings.load(candidate));
     }
+
+    private record LoadedSettings(Settings protection, DenialMessageSettings messages) { }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equalsIgnoreCase("spawn")) {
@@ -71,8 +81,10 @@ public final class OverworldLobby extends JavaPlugin {
                 return true;
             }
             try {
-                Settings candidate = readSettings();
-                settings = candidate;
+                LoadedSettings candidate = readSettings();
+                settings = candidate.protection();
+                messageSettings = candidate.messages();
+                messages.close();
                 worlds.refresh();
                 players.refresh();
                 spawn.refresh();

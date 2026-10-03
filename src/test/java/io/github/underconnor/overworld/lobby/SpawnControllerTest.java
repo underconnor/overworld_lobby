@@ -110,6 +110,24 @@ class SpawnControllerTest {
         assertEquals(45, target.getValue().getYaw());
     }
 
+    @Test void operatorActivityBypassStillUsesAutomaticJoinAndRespawnSpawn() {
+        permissions.add("overworld.lobby.bypass");
+        controller.start();
+        controller.onJoin(join());
+        assertEquals(1, pending.size());
+        pending.getFirst().run();
+        ArgumentCaptor<Location> target = ArgumentCaptor.forClass(Location.class);
+        verify(player).teleport(target.capture());
+        assertExact(target.getValue(), lobby);
+        PlayerRespawnEvent event = respawn();
+        controller.onRespawn(event);
+        verify(event).setRespawnLocation(any(Location.class));
+        permissions.add("overworld.lobby.bypass.spawn");
+        PlayerRespawnEvent bypassed = respawn();
+        controller.onRespawn(bypassed);
+        verify(bypassed, never()).setRespawnLocation(any());
+    }
+
     @Test void pendingJoinIsSkippedWhenSourceLeavesProtectionOrControllerCloses() {
         controller.start();
         controller.onJoin(join());

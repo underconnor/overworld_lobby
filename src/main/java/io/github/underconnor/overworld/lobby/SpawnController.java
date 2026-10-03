@@ -86,7 +86,6 @@ public final class SpawnController implements Listener, AutoCloseable {
 
     private boolean automaticallyMoves(Player player) {
         return policy.settings().spawn().enabled() && policy.protects(player.getWorld())
-            && !player.hasPermission("overworld.lobby.bypass")
             && !player.hasPermission("overworld.lobby.bypass.spawn");
     }
 

@@ -40,6 +40,14 @@
 
 자연 스폰 차단은 기존 엔티티를 삭제하지 않습니다. 번식·스포너 등 자동 생성도 제한합니다. 명령어·다른 플러그인이 만드는 엔티티와 권한을 가진 플레이어의 생성은 별도 이벤트 규칙을 따릅니다.
 
+## 차단 안내
+
+사용자가 직접 시도한 행동을 막으면 `여기서는 블록을 부술 수 없습니다.` 같은 안내를 보냅니다. 기본은 빨간색 채팅이며 `[로비]` 접두어는 붙이지 않습니다. 같은 사용자의 안내는 기본 1초 간격으로 제한해 양손 클릭이나 연속 이벤트로 중복되지 않게 합니다.
+
+`messages.enabled`로 전체 안내를 끄고, `messages.channel`을 `CHAT` 또는 `ACTION_BAR`로 선택할 수 있습니다. `messages.cooldown-ms`는 안내 간격이며 `prefix`는 기본 `&c`입니다. `messages.denied`의 행동별 문구를 빈 문자열로 설정하면 그 행동의 안내만 끕니다.
+
+열 수 있는 상자와 권한으로 허용한 행동에는 차단 안내를 보내지 않습니다. 환경 피해·허기·포화도 유지와 자연 스폰·날씨 같은 자동 보호도 안내 없이 적용합니다.
+
 ## 명령어
 
 | 명령어 | 권한 | 설명 |
@@ -54,11 +62,11 @@
 
 Bukkit의 `Player.hasPermission`으로 검사하므로 LuckPerms의 그룹·유저·월드/서버 컨텍스트와 실시간 권한 변경을 사용합니다. LuckPerms가 없는 환경에서는 Bukkit 기본 권한을 사용합니다.
 
-**보호 우회 권한은 OP를 포함해 기본으로 부여하지 않습니다.** OP의 설정 관리 권한과 보호 우회 권한은 따로 관리합니다.
+**OP는 기본적으로 블록·엔티티·아이템 등 행동 제한을 우회합니다.** OP도 설정한 서바이벌·비행·포만감·포화도·환경 피해 보호와 접속 시 스폰 이동은 적용받습니다. 이 동작들은 각각의 예외 권한으로 조정합니다.
 
 | 권한 | 허용하는 행동 |
 | --- | --- |
-| `overworld.lobby.bypass` | 플레이어 행동 보호와 게임 모드·비행 강제 적용 전체 우회 |
+| `overworld.lobby.bypass` | 블록·엔티티·아이템 등 행동 제한 우회. OP 기본. 모드·스폰·허기·환경 피해 제외 |
 | `overworld.lobby.bypass.mode` | 게임 모드·비행 강제 적용 우회 |
 | `overworld.lobby.bypass.spawn` | 접속·리스폰·공허 추락 시 자동 스폰 이동 우회 |
 | `overworld.lobby.bypass.block-break` | 블록 파괴 |
@@ -85,6 +93,10 @@ lp group builder permission set overworld.lobby.bypass.block-place true
 lp group builder permission set overworld.lobby.bypass.interact true
 lp user <닉네임> permission set overworld.lobby.bypass true
 ```
+
+OP의 기본 행동 우회를 끄려면 `lp user <닉네임> permission set overworld.lobby.bypass false`를 사용합니다. 개별 행동 권한을 `false`로 지정해도 전체 행동 우회가 `true`이면 해당 행동은 허용되므로, 일부 행동만 허용하려면 전체 우회를 끄고 필요한 개별 권한을 부여하세요.
+
+크리에이티브 등 게임 모드를 직접 변경할 운영자는 `lp user <닉네임> permission set overworld.lobby.bypass.mode true`를 부여합니다. 접속·리스폰·공허 추락 시 자동 스폰 이동을 제외하려면 `lp user <닉네임> permission set overworld.lobby.bypass.spawn true`를 사용합니다. 이 권한들과 `bypass.hunger`, `bypass.player-damage`는 OP에게도 기본으로 부여하지 않습니다.
 
 PvP는 공격자의 `bypass.pvp` 권한으로 허용합니다. 투사체를 사용하려면 `bypass.item-use`도 필요합니다. 피해자의 `bypass.player-damage`는 환경 피해 제한을 제어합니다.
 

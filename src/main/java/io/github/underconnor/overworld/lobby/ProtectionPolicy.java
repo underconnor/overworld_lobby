@@ -14,8 +14,12 @@ public final class ProtectionPolicy {
             && !bypasses(player, action);
     }
     public boolean bypasses(Player player, Action action) {
-        return player != null && (player.hasPermission("overworld.lobby.bypass")
-            || player.hasPermission(action.permission()));
+        if (player == null) return false;
+        if (player.hasPermission(action.permission())) return true;
+        // The OP-default activity bypass lets staff edit the lobby. Keeping
+        // players fed and safe remains independent of their editing authority.
+        return action != Action.HUNGER && action != Action.PLAYER_DAMAGE
+            && player.hasPermission("overworld.lobby.bypass");
     }
     public boolean blocks(EnvironmentRule rule, World world) {
         return protects(world) && settings().environmentRules().contains(rule);

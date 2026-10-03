@@ -117,7 +117,7 @@ class PlayerControllerTest {
         assertFalse(controller.toggleFlight(player, true));
     }
 
-    @Test void modeAndGlobalBypassLeaveInitialOperatorModeAndFlightUntouched() {
+    @Test void onlyModeBypassLeavesInitialOperatorModeAndFlightUntouched() {
         mode.set(GameMode.CREATIVE);
         allowFlight.set(true);
         flying.set(true);
@@ -130,7 +130,11 @@ class PlayerControllerTest {
         permissions.clear();
         permissions.add("overworld.lobby.bypass");
         controller.refresh();
-        verify(player, never()).setGameMode(any());
+        assertEquals(GameMode.SURVIVAL, mode.get());
+        assertFalse(allowFlight.get());
+        assertFalse(flying.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
     }
 
     @Test void shutdownRestoresPriorModeAllowFlightSpeedAndFlyingState() {
@@ -229,7 +233,7 @@ class PlayerControllerTest {
         assertEquals(20, food.get());
     }
 
-    @Test void modeBypassKeepsFoodProtectionWhileHungerAndGlobalBypassRestoreFood() {
+    @Test void modeAndActivityBypassKeepFoodProtectionWhileHungerBypassRestoresFood() {
         mode.set(GameMode.CREATIVE);
         allowFlight.set(true);
         permissions.add("overworld.lobby.bypass.mode");
@@ -250,8 +254,23 @@ class PlayerControllerTest {
         assertEquals(20, food.get());
         permissions.add("overworld.lobby.bypass");
         controller.refresh();
-        assertEquals(7, food.get());
-        assertEquals(2.5f, saturation.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
+        assertEquals(0f, exhaustion.get());
+    }
+
+    @Test void operatorActivityBypassKeepsConfiguredSurvivalFlightAndFullFood() {
+        permissions.add("overworld.lobby.bypass");
+        permissions.add("overworld.lobby.fly");
+        mode.set(GameMode.CREATIVE);
+        controller.refresh();
+        assertEquals(GameMode.SURVIVAL, mode.get());
+        assertTrue(allowFlight.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
+        assertEquals(0f, exhaustion.get());
+        assertTrue(controller.toggleFlight(player, true));
+        assertTrue(flying.get());
     }
 
     @Test void shutdownRestoresOriginalFoodRatherThanExportingLobbySaturation() {

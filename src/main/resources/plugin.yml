@@ -29,8 +29,8 @@ permissions:
     description: 설정에서 비행을 허용한 로비에서 비행하기
     default: true
   overworld.lobby.bypass:
-    description: 모든 플레이어 보호와 모드 강제 변경 우회
-    default: false
+    description: 블록·엔티티·아이템 등 행동 제한 우회
+    default: op
   overworld.lobby.bypass.mode:
     description: 게임 모드와 비행 상태 강제 변경 우회
     default: false

@@ -19,6 +19,7 @@ import org.bukkit.entity.TNTPrimed;
 import org.bukkit.entity.Tameable;
 import org.bukkit.entity.Vehicle;
 import org.bukkit.event.Event.Result;
+import org.bukkit.event.Cancellable;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -53,6 +54,7 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerPickupArrowEvent;
 import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.event.player.PlayerTakeLecternBookEvent;
@@ -66,50 +68,56 @@ import org.bukkit.inventory.ItemStack;
 /** Player-facing protections. Permission checks are delegated to Bukkit/LuckPerms. */
 public final class ProtectionListener implements Listener {
     private final ProtectionPolicy policy;
+    private final DenialMessages messages;
 
     public ProtectionListener(ProtectionPolicy policy) {
+        this(policy, null);
+    }
+
+    public ProtectionListener(ProtectionPolicy policy, DenialMessages messages) {
         this.policy = policy;
+        this.messages = messages;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
         if (policy.blocks(Action.BLOCK_BREAK, event.getPlayer(), event.getBlock().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.BLOCK_BREAK);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockDamage(BlockDamageEvent event) {
         if (policy.blocks(Action.BLOCK_BREAK, event.getPlayer(), event.getBlock().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.BLOCK_BREAK);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
         if (policy.blocks(Action.BLOCK_PLACE, event.getPlayer(), event.getBlock().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.BLOCK_PLACE);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEmptyBucket(PlayerBucketEmptyEvent event) {
         if (policy.blocks(Action.BUCKETS, event.getPlayer(), event.getBlock().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.BUCKETS);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFillBucket(PlayerBucketFillEvent event) {
         if (policy.blocks(Action.BUCKETS, event.getPlayer(), event.getBlock().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.BUCKETS);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBucketEntity(PlayerBucketEntityEvent event) {
         if (policy.blocks(Action.BUCKETS, event.getPlayer(), event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.BUCKETS);
         }
     }
 
@@ -126,22 +134,38 @@ public final class ProtectionListener implements Listener {
         // block-break permission must also allow the initial click/tool channel.
         if (event.getAction() == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) {
             if (policy.blocks(Action.BLOCK_BREAK, player, world)) {
+                boolean changed = event.useInteractedBlock() != Result.DENY || event.useItemInHand() != Result.DENY;
                 event.setUseInteractedBlock(Result.DENY);
                 event.setUseItemInHand(Result.DENY);
+                if (changed) feedback(player, Action.BLOCK_BREAK);
             }
             return;
         }
 
+        Action message = null;
+        boolean openingContainer = block != null && event.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK
+            && policy.settings().allowedContainers().contains(block.getType());
+        boolean containerAllowed = openingContainer && !policy.blocks(Action.CONTAINERS, player, world)
+            && (!player.isSneaking() || event.getItem() == null || event.getItem().getType().isAir());
         if (block != null) {
-            boolean openingContainer = event.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK
-                && policy.settings().allowedContainers().contains(block.getType());
             Action action = openingContainer ? Action.CONTAINERS : Action.INTERACT;
-            if (policy.blocks(action, player, world)) event.setUseInteractedBlock(Result.DENY);
+            if (policy.blocks(action, player, world)) {
+                if (event.useInteractedBlock() != Result.DENY) message = action;
+                event.setUseInteractedBlock(Result.DENY);
+            }
         }
 
-        if (policy.blocks(itemAction(event.getItem()), player, world)) {
+        Action itemAction = itemAction(event.getItem());
+        if (policy.blocks(itemAction, player, world)) {
+            boolean changed = event.useItemInHand() != Result.DENY;
             event.setUseItemInHand(Result.DENY);
+            // Opening an allowed chest succeeds even while a held item's own use is blocked.
+            if (message == null && changed && !containerAllowed && event.getItem() != null
+                && !event.getItem().getType().isAir()
+                && (event.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK
+                    || event.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_AIR)) message = itemAction;
         }
+        if (message != null && event.getAction() != org.bukkit.event.block.Action.PHYSICAL) feedback(player, message);
     }
 
     private Action itemAction(ItemStack item) {
@@ -163,28 +187,28 @@ public final class ProtectionListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityInteract(PlayerInteractEntityEvent event) {
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getRightClicked().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityInteractAt(PlayerInteractAtEntityEvent event) {
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getRightClicked().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onArmorStand(PlayerArmorStandManipulateEvent event) {
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getRightClicked().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onItemFrame(PlayerItemFrameChangeEvent event) {
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getItemFrame().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
     }
 
@@ -193,14 +217,14 @@ public final class ProtectionListener implements Listener {
         Player player = event instanceof HangingBreakByEntityEvent byEntity
             ? responsible(byEntity.getDamageSource(), byEntity.getRemover()) : null;
         if (policy.blocks(Action.ENTITY_DAMAGE, player, event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, player, Action.ENTITY_DAMAGE);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onHangingPlace(HangingPlaceEvent event) {
         if (policy.blocks(Action.BLOCK_PLACE, event.getPlayer(), event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.BLOCK_PLACE);
         }
     }
 
@@ -210,7 +234,7 @@ public final class ProtectionListener implements Listener {
         if (event.getPlayer() == null) return;
         Action action = event.getEntity() instanceof Vehicle ? Action.VEHICLES : Action.BLOCK_PLACE;
         if (policy.blocks(action, event.getPlayer(), event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), action);
         }
     }
 
@@ -225,10 +249,10 @@ public final class ProtectionListener implements Listener {
             Action action = attacker != null && attacker != player ? Action.PVP : Action.PLAYER_DAMAGE;
             Player actor = action == Action.PVP ? attacker : player;
             if (policy.blocks(action, actor, victim.getWorld())) {
-                event.setCancelled(true);
+                deny(event, actor, action);
             }
         } else if (policy.blocks(Action.ENTITY_DAMAGE, attacker, victim.getWorld())) {
-            event.setCancelled(true);
+            deny(event, attacker, Action.ENTITY_DAMAGE);
         }
     }
 
@@ -251,7 +275,7 @@ public final class ProtectionListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent event) {
         if (policy.blocks(Action.ITEM_DROP, event.getPlayer(), event.getItemDrop().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ITEM_DROP);
         }
     }
 
@@ -259,21 +283,21 @@ public final class ProtectionListener implements Listener {
     public void onPickup(EntityPickupItemEvent event) {
         if (event.getEntity() instanceof Player player
             && policy.blocks(Action.ITEM_PICKUP, player, event.getItem().getWorld())) {
-            event.setCancelled(true);
+            deny(event, player, Action.ITEM_PICKUP);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPickupArrow(PlayerPickupArrowEvent event) {
         if (policy.blocks(Action.ITEM_PICKUP, event.getPlayer(), event.getArrow().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ITEM_PICKUP);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPickupExperience(PlayerPickupExperienceEvent event) {
         if (policy.blocks(Action.ITEM_PICKUP, event.getPlayer(), event.getExperienceOrb().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ITEM_PICKUP);
         }
     }
 
@@ -281,42 +305,42 @@ public final class ProtectionListener implements Listener {
     public void onProjectile(ProjectileLaunchEvent event) {
         Player player = responsible(event.getEntity());
         if (player != null && policy.blocks(Action.ITEM_USE, player, event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, player, Action.ITEM_USE);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onConsume(PlayerItemConsumeEvent event) {
         if (policy.blocks(Action.ITEM_USE, event.getPlayer(), event.getPlayer().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ITEM_USE);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFish(PlayerFishEvent event) {
         if (policy.blocks(Action.ITEM_USE, event.getPlayer(), event.getHook().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ITEM_USE);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onShear(PlayerShearEntityEvent event) {
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onLeash(PlayerLeashEntityEvent event) {
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onUnleash(PlayerUnleashEntityEvent event) {
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
     }
 
@@ -324,49 +348,49 @@ public final class ProtectionListener implements Listener {
     public void onTame(EntityTameEvent event) {
         if (event.getOwner() instanceof Player player
             && policy.blocks(Action.ENTITY_INTERACT, player, event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, player, Action.ENTITY_INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onHarvest(PlayerHarvestBlockEvent event) {
         if (policy.blocks(Action.INTERACT, event.getPlayer(), event.getHarvestedBlock().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBed(PlayerBedEnterEvent event) {
         if (policy.blocks(Action.INTERACT, event.getPlayer(), event.getBed().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSignOpen(PlayerOpenSignEvent event) {
         if (policy.blocks(Action.INTERACT, event.getPlayer(), event.getSign().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSignChange(SignChangeEvent event) {
         if (policy.blocks(Action.INTERACT, event.getPlayer(), event.getBlock().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onLecternTake(PlayerTakeLecternBookEvent event) {
         if (policy.blocks(Action.INTERACT, event.getPlayer(), event.getLectern().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.INTERACT);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onLecternInsert(PlayerInsertLecternBookEvent event) {
         if (policy.blocks(Action.INTERACT, event.getPlayer(), event.getBlock().getWorld())) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.INTERACT);
         }
     }
 
@@ -374,7 +398,7 @@ public final class ProtectionListener implements Listener {
     public void onVehicleEnter(VehicleEnterEvent event) {
         if (event.getEntered() instanceof Player player
             && policy.blocks(Action.VEHICLES, player, event.getVehicle().getWorld())) {
-            event.setCancelled(true);
+            deny(event, player, Action.VEHICLES);
         }
     }
 
@@ -382,7 +406,7 @@ public final class ProtectionListener implements Listener {
     public void onVehicleDamage(VehicleDamageEvent event) {
         if (policy.blocks(Action.ENTITY_DAMAGE, responsible(event.getDamageSource(), event.getAttacker()),
             event.getVehicle().getWorld())) {
-            event.setCancelled(true);
+            deny(event, responsible(event.getDamageSource(), event.getAttacker()), Action.ENTITY_DAMAGE);
         }
     }
 
@@ -390,14 +414,14 @@ public final class ProtectionListener implements Listener {
     public void onVehicleDestroy(VehicleDestroyEvent event) {
         if (policy.blocks(Action.ENTITY_DAMAGE, responsible(event.getDamageSource(), event.getAttacker()),
             event.getVehicle().getWorld())) {
-            event.setCancelled(true);
+            deny(event, responsible(event.getDamageSource(), event.getAttacker()), Action.ENTITY_DAMAGE);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPortal(PlayerPortalEvent event) {
         if (blockedPortal(event)) {
-            event.setCancelled(true);
+            deny(event, event.getPlayer(), Action.PORTALS);
         }
     }
 
@@ -408,7 +432,7 @@ public final class ProtectionListener implements Listener {
         switch (event.getCause()) {
             case NETHER_PORTAL, END_PORTAL, END_GATEWAY -> {
                 if (blockedPortal(event)) {
-                    event.setCancelled(true);
+                    deny(event, event.getPlayer(), Action.PORTALS);
                 }
             }
             default -> { }
@@ -426,15 +450,18 @@ public final class ProtectionListener implements Listener {
         Player source = responsible(event.getEntity());
         if (source == null) return;
         if (policy.blocks(Action.ITEM_USE, source, event.getEntity().getWorld())) {
-            event.setCancelled(true);
+            deny(event, source, Action.ITEM_USE);
             return;
         }
+        boolean restrictedPvp = false;
         for (var target : event.getAffectedEntities()) {
             if (target instanceof Player player && player != source
                 && policy.blocks(Action.PVP, source, target.getWorld())) {
+                restrictedPvp |= event.getIntensity(target) > 0;
                 event.setIntensity(target, 0);
             }
         }
+        if (restrictedPvp && !event.isCancelled()) feedback(source, Action.PVP);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -447,6 +474,22 @@ public final class ProtectionListener implements Listener {
         }
         event.getAffectedEntities().removeIf(target -> target instanceof Player player
             && player != source && policy.blocks(Action.PVP, source, target.getWorld()));
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onQuit(PlayerQuitEvent event) {
+        if (messages != null) messages.clear(event.getPlayer().getUniqueId());
+    }
+
+    private void deny(Cancellable event, Player actor, Action action) {
+        boolean alreadyCancelled = event.isCancelled();
+        event.setCancelled(true);
+        if (!alreadyCancelled) feedback(actor, action);
+    }
+
+    private void feedback(Player actor, Action action) {
+        if (messages != null && actor != null && action != Action.PLAYER_DAMAGE && action != Action.HUNGER)
+            messages.send(actor, action);
     }
 
     private Player responsible(DamageSource source, Entity fallback) {

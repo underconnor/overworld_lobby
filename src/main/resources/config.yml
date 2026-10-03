@@ -30,6 +30,28 @@ spawn:
 # 자연 생성·번식·스포너 등을 막습니다. 기존 엔티티를 삭제하지 않습니다.
 prevent-natural-spawns: true
 
+# 차단된 행동에만 안내합니다. 연속 시도는 플레이어마다 최대 1초에 한 번 표시합니다.
+# & 색상 코드를 지원하며, 빈 문구는 해당 안내를 끕니다.
+messages:
+  enabled: true
+  channel: CHAT # CHAT, ACTION_BAR
+  cooldown-ms: 1000
+  prefix: '&c'
+  denied:
+    block-break: '여기서는 블록을 부술 수 없습니다.'
+    block-place: '여기서는 블록을 설치할 수 없습니다.'
+    buckets: '여기서는 이 아이템을 사용할 수 없습니다.'
+    interact: '여기서는 이 블록을 사용할 수 없습니다.'
+    containers: '여기서는 이 상자를 열 수 없습니다.'
+    entity-interact: '여기서는 이 엔티티를 조작할 수 없습니다.'
+    entity-damage: '여기서는 공격할 수 없습니다.'
+    pvp: '여기서는 공격할 수 없습니다.'
+    item-use: '여기서는 이 아이템을 사용할 수 없습니다.'
+    item-drop: '여기서는 아이템을 버릴 수 없습니다.'
+    item-pickup: '여기서는 아이템을 주울 수 없습니다.'
+    vehicles: '여기서는 탈것을 사용할 수 없습니다.'
+    portals: '여기서는 포털을 사용할 수 없습니다.'
+
 # true이면 해당 행동을 막습니다. 기능별 bypass 권한으로 허용할 수 있습니다.
 protection:
   block-break: true
