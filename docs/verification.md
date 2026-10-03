@@ -1,29 +1,29 @@
-# Overworld Lobby 1.0.4 검증 기록
+# Overworld Lobby 1.0.5 검증 기록
 
-검증일: 2026-10-03 (Asia/Seoul)
+검증일: 2026-10-04 (Asia/Seoul)
 
 ## 검증한 파일
 
-- 파일: `overworld_lobby-1.0.4.jar` (104,164바이트)
-- SHA-256: `bb76096abd98fb3718545b9c8615988a24226ca3281b60ea6c6969c3c4019e2e`
+- 파일: `overworld_lobby-1.0.5.jar` (104,607바이트)
+- SHA-256: `4e8f84fe28a118f8df7bf458b63c02a851dc2ea81721c9af9ae070b9376a7e7d`
 - 대상: Paper 26.2 build 129 / Java 25
 
 ## 자동 테스트
 
-`./gradlew --no-daemon clean build` 완료. JUnit 테스트 310개 통과, 실패·오류·건너뜀 0개.
+`./gradlew --no-daemon clean build` 완료. JUnit 테스트 321개 통과, 실패·오류·건너뜀 0개.
 
 설정 검증, 월드 선택, 동작별 권한, OP·전체 권한 우회, 모든 플레이어의 음식·낙하 보호, 환경 보호, 시간·날씨 설정과 복원, 모드·비행 관리, 스폰 저장 명령과 자동 이동, 월드별 사각 경계, 차단 안내와 상태 집계를 검사했다.
 
 ## 실제 Paper 기동 검증
 
-운영 서버와 별개로 `127.0.0.1:25586`에 새 평지 월드를 만들었다. OverworldLobby와 [공식 LuckPerms Bukkit 5.5.85](https://metadata.luckperms.net/data/all)를 함께 기동했다. 테스트가 끝난 뒤 서버를 정상 종료하고 같은 월드와 LuckPerms 저장소로 완전히 재시작했다.
+운영 서버와 별개로 `127.0.0.1:25586`에 새 평지 월드를 만들었다. OverworldLobby, [공식 LuckPerms Bukkit 5.5.85](https://metadata.luckperms.net/data/all), 운영과 같은 Citizens 2.0.43-SNAPSHOT build 4250를 함께 기동했다. 테스트가 끝난 뒤 서버를 정상 종료하고 같은 월드와 LuckPerms 저장소로 완전히 재시작했다.
 
 | 단계 | 통과한 확인 항목 | 프로세스 종료 | 소요 시간 |
 | --- | ---: | ---: | ---: |
-| 새 월드 첫 기동 | 519 | 0 | 41.53초 |
-| 동일 월드 재시작 | 24 | 0 | 35.87초 |
+| 새 월드 첫 기동 | 555 | 0 | 13.86초 |
+| 동일 월드 재시작 | 24 | 0 | 9.82초 |
 
-플러그인 활성화·비활성화 오류나 이벤트 처리 예외가 없었다. 확인 항목에는 명령어 실행 및 재적용 성공 여부도 포함되어 있으므로 543개의 서로 다른 사용자 기능을 의미하지는 않는다.
+플러그인 활성화·비활성화 오류나 이벤트 처리 예외가 없었다. 확인 항목에는 명령어 실행 및 재적용 성공 여부도 포함되어 있으므로 579개의 서로 다른 사용자 기능을 의미하지는 않는다.
 
 실제 Paper의 PluginManager에 이벤트를 전달해 다음 결과를 확인했다.
 
@@ -37,6 +37,14 @@
 - `/lobby fly on`은 서바이벌에서 비행 허용과 비행 상태를 켠다. `off`는 비행을 끄며, 비행이 꺼진 상태의 비행 시작 이벤트를 차단한다.
 - `protection.hunger`와 `players.keep-food-full`이 켜진 보호 월드에서는 일반 사용자·OP·전체 우회·개별 권한 사용자 모두 음식 20·포만감 20·피로도 0을 유지한다. 기존 배고픔 우회 노드를 부여해도 해제되지 않는다. 음식 유지 또는 배고픔 보호를 끄거나 보호 범위를 벗어나면 기존 수치를 복원하고, 다시 활성화하면 가득 채운다.
 - `protection.player-damage`가 켜진 보호 월드의 낙하 피해는 OP·전체 우회·개별 플레이어 피해 우회 여부와 관계없이 차단한다. 화염·익사 등 다른 피해와 PvP에는 기존 동작별 권한 우회를 유지한다. 피해 보호를 끄거나 보호 범위를 벗어나면 낙하 차단도 해제된다.
+
+## Citizens NPC 클릭
+
+Citizens가 활성 상태에서 직접 등록한 `NPC` 메타데이터(Boolean.TRUE, owner 이름 Citizens)가 있는 엔티티의 두 우클릭 이벤트는 로비 조작 보호를 건너뛴다. NPC 클릭에는 `여기서는 이 엔티티를 조작할 수 없습니다.` 안내를 표시하지 않는다. 일반 엔티티 조작과 NPC 공격·갑옷거치대 물리 변경은 기존 규칙을 유지하며, 다른 플러그인이 취소한 이벤트를 풀지 않는다.
+
+실제 Paper·Citizens 플러그인 소유 메타데이터로 양손·두 클릭 종류의 로비 통과와 안내 부재, 일반 엔티티 차단·안내, 공격 보호와 기존 취소 상태 유지를 확인했다. 실제 Citizens registry에서 만든 NPC의 공식 메타데이터와 클릭 안내 부재도 확인했다. 다른 플러그인 소유·거짓 값·비활성 소유 플러그인·문자열 표식은 NPC 예외를 받지 않는다. Citizens API를 빌드 의존성으로 추가하지 않았으며 Citizens가 없는 환경의 회귀 테스트도 통과했다.
+
+이 검증은 실제 클라이언트 클릭과 운영 NPC command trait의 실행을 포함하지 않는다.
 
 ## 월드별 시간·날씨 명령
 
@@ -107,9 +115,19 @@ OP과 전체 우회 권한을 가진 일반 사용자에게 블록 파괴·설�
 - 음식 유지와 환경 피해 방지는 안내를 보내지 않는다. 안내 전체 끄기, 행동별 빈 문구, 채팅·액션바 선택과 사용자 문구 재적용을 확인했다.
 - 잘못된 안내 간격이나 문자열이 아닌 접두어를 재적용하면 기존 안내 문구·블록 보호·시간·플레이어 설정을 유지한다. 안내 설정 실패로 다른 설정이 일부만 적용되지 않는다.
 
-## 1.0.4 공개 릴리즈
+## 1.0.5 공개 릴리즈와 운영 적용
 
-[v1.0.4 릴리즈](https://github.com/underconnor/overworld_lobby/releases/tag/v1.0.4)의 [Build](https://github.com/underconnor/overworld_lobby/actions/runs/37130519813)와 [Release](https://github.com/underconnor/overworld_lobby/actions/runs/37130594113)가 성공했다. 내려받은 공개 JAR의 크기와 SHA-256은 위 최종 검증 파일과 일치했다.
+2026-10-04 KST에 [v1.0.5 릴리즈](https://github.com/underconnor/overworld_lobby/releases/tag/v1.0.5)를 게시했다. [Build](https://github.com/underconnor/overworld_lobby/actions/runs/37139744776)와 [Release](https://github.com/underconnor/overworld_lobby/actions/runs/37140188367)가 성공했다. 공개 JAR·격리 검증 JAR·설치 JAR의 해시가 위 최종 파일과 일치했다.
+
+정상 저장·종료 후253,015,380바이트 콜드 백업의 gzip 무결성과 필요한 파일을 확인하고 로비만 재시작해 JAR만 교체했다. 백업 SHA-256은 `ac23099d3ece0d4795c10b30467cdc0f31dce3f8a35a545e2f26d1c5db775ef4`이다. 별도 읽기 전용36점검과 NPC·월드 설정4점검이 통과했다. 플러그인8개와 서비스7개가 정상이며 기존 월드·Compose·마운트·권한·로비 설정·Citizens JAR를 보존했다.
+
+운영 NPC1개와 등록 명령3개는 교체 직전 콜드 백업과 같다. 최초 파일 캡처에는 명령1개만 있었으나 정상 종료 때 런타임의3개가 저장된 차이는 콜드 백업으로 확인했다. 해당 NPC 파일을 교체하거나 복원하지 않았다. 여섯 월드의 PvP=false와 실제 보기·전송12, 시뮬레이션6도 확인했다. 실제 클라이언트 클릭과 운영 NPC command trait 실행은 별도로 검증해야 한다.
+
+## 1.0.4 공개 릴리즈와 당시 운영 적용
+
+이 절은 당시 1.0.4의 기록이다. 단위 테스트310개, Paper 첫 기동519개·재시작24개가 통과했고 JAR는104,164바이트·SHA-256 `bb76096abd98fb3718545b9c8615988a24226ca3281b60ea6c6969c3c4019e2e`였다.
+
+[v1.0.4 릴리즈](https://github.com/underconnor/overworld_lobby/releases/tag/v1.0.4)의 [Build](https://github.com/underconnor/overworld_lobby/actions/runs/37130519813)와 [Release](https://github.com/underconnor/overworld_lobby/actions/runs/37130594113)가 성공했다. 내려받은 공개 JAR의 크기와 SHA-256은 당시 1.0.4 검증 파일과 일치했다.
 
 운영 로비에 JAR만 교체했다. 저장 후 정상 종료하고 225,262,546바이트 콜드 백업의 gzip 무결성과 필요한 파일을 확인했으며 로비만 재시작했다. 백업 SHA-256은 `519cdc86dd3f6fac0332f4e7e364d92880334d857a43526e1b192e868d4dae0f`이다.
 
