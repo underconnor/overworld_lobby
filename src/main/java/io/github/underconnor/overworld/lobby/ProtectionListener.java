@@ -64,6 +64,8 @@ import org.bukkit.event.vehicle.VehicleDamageEvent;
 import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.event.vehicle.VehicleEnterEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.metadata.MetadataValue;
+import org.bukkit.plugin.Plugin;
 
 /** Player-facing protections. Permission checks are delegated to Bukkit/LuckPerms. */
 public final class ProtectionListener implements Listener {
@@ -186,6 +188,7 @@ public final class ProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityInteract(PlayerInteractEntityEvent event) {
+        if (isCitizensNpc(event.getRightClicked())) return;
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getRightClicked().getWorld())) {
             deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
@@ -193,9 +196,20 @@ public final class ProtectionListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityInteractAt(PlayerInteractAtEntityEvent event) {
+        if (isCitizensNpc(event.getRightClicked())) return;
         if (policy.blocks(Action.ENTITY_INTERACT, event.getPlayer(), event.getRightClicked().getWorld())) {
             deny(event, event.getPlayer(), Action.ENTITY_INTERACT);
         }
+    }
+
+    /** Citizens owns this marker; unrelated metadata must not exempt ordinary entities. */
+    private boolean isCitizensNpc(Entity entity) {
+        for (MetadataValue marker : entity.getMetadata("NPC")) {
+            Plugin owner = marker.getOwningPlugin();
+            if (owner != null && owner.isEnabled() && owner.getName().equals("Citizens")
+                && Boolean.TRUE.equals(marker.value())) return true;
+        }
+        return false;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

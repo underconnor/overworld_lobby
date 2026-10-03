@@ -5,7 +5,7 @@ api-version: '26.2'
 author: underconnor
 description: Configurable lobby protection, environment locks and survival flight
 website: https://github.com/underconnor/overworld_lobby
-softdepend: [LuckPerms, Multiverse-Core]
+softdepend: [LuckPerms, Multiverse-Core, Citizens]
 commands:
   setspawn:
     description: 현재 위치·시선 또는 지정 좌표로 기본 로비 스폰을 저장합니다.

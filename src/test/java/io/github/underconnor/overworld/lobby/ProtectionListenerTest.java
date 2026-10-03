@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -14,6 +15,7 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.Arrow;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
@@ -34,9 +36,11 @@ import org.bukkit.event.entity.PotionSplashEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
@@ -45,11 +49,15 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.metadata.MetadataValue;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.util.Vector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class ProtectionListenerTest {
     private World lobby;
@@ -252,6 +260,92 @@ class ProtectionListenerTest {
         listener.onEntityInteract(permitted);
         assertFalse(permitted.isCancelled());
         verify(player, never()).hasPermission(Action.ITEM_USE.permission());
+    }
+
+    @ParameterizedTest @EnumSource(value = EquipmentSlot.class, names = {"HAND", "OFF_HAND"})
+    void citizensNpcClicksPassThroughWithoutLobbyDenialInBothHands(EquipmentSlot hand) {
+        Entity npc = mock(Entity.class);
+        List<MetadataValue> markers = List.of(npcMarker("AnotherPlugin", true, true),
+            npcMarker("Citizens", true, false), npcMarker("Citizens", true, true));
+        when(npc.getMetadata("NPC")).thenReturn(markers);
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        var click = new PlayerInteractEntityEvent(player, npc, hand);
+        var clickAt = new PlayerInteractAtEntityEvent(player, npc, new Vector(), hand);
+        feedback.onEntityInteract(click);
+        feedback.onEntityInteractAt(clickAt);
+        assertFalse(click.isCancelled());
+        assertFalse(clickAt.isCancelled());
+        verifyNoInteractions(messages);
+    }
+
+    @Test void citizensNpcExceptionNeverUncancelsAnEarlierPluginDecision() {
+        Entity npc = mock(Entity.class);
+        MetadataValue marker = npcMarker("Citizens", true, true);
+        when(npc.getMetadata("NPC")).thenReturn(List.of(marker));
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        var click = new PlayerInteractEntityEvent(player, npc, EquipmentSlot.HAND);
+        var clickAt = new PlayerInteractAtEntityEvent(player, npc, new Vector(), EquipmentSlot.HAND);
+        click.setCancelled(true);
+        clickAt.setCancelled(true);
+        feedback.onEntityInteract(click);
+        feedback.onEntityInteractAt(clickAt);
+        assertTrue(click.isCancelled());
+        assertTrue(clickAt.isCancelled());
+        verifyNoInteractions(messages);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"missing", "ownerless", "foreign", "disabled", "false", "string", "wrong-case"})
+    void untrustedOrInactiveNpcMarkersKeepNormalProtectionAndFeedback(String kind) {
+        Entity target = mock(Entity.class);
+        when(target.getWorld()).thenReturn(lobby);
+        MetadataValue marker = switch (kind) {
+            case "ownerless" -> npcMarker(null, true, true);
+            case "foreign" -> npcMarker("AnotherPlugin", true, true);
+            case "disabled" -> npcMarker("Citizens", false, true);
+            case "false" -> npcMarker("Citizens", true, false);
+            case "string" -> npcMarker("Citizens", true, "true");
+            case "wrong-case" -> npcMarker("citizens", true, true);
+            default -> null;
+        };
+        when(target.getMetadata("NPC")).thenReturn(marker == null ? List.of() : List.of(marker));
+        DenialMessages messages = mock(DenialMessages.class);
+        var feedback = new ProtectionListener(new ProtectionPolicy(() -> settings), messages);
+        var click = new PlayerInteractEntityEvent(player, target, EquipmentSlot.HAND);
+        var clickAt = new PlayerInteractAtEntityEvent(player, target, new Vector(), EquipmentSlot.OFF_HAND);
+        feedback.onEntityInteract(click);
+        feedback.onEntityInteractAt(clickAt);
+        assertTrue(click.isCancelled());
+        assertTrue(clickAt.isCancelled());
+        verify(messages, times(2)).send(player, Action.ENTITY_INTERACT);
+    }
+
+    @Test void citizensNpcClickExceptionDoesNotAllowAttacksOrArmorStandManipulation() {
+        ArmorStand npc = mock(ArmorStand.class);
+        when(npc.getWorld()).thenReturn(lobby);
+        MetadataValue marker = npcMarker("Citizens", true, true);
+        when(npc.getMetadata("NPC")).thenReturn(List.of(marker));
+        var attack = hit(player, npc);
+        listener.onDamage(attack);
+        verify(attack).setCancelled(true);
+        PlayerArmorStandManipulateEvent manipulate = mock(PlayerArmorStandManipulateEvent.class);
+        when(manipulate.getPlayer()).thenReturn(player);
+        when(manipulate.getRightClicked()).thenReturn(npc);
+        listener.onArmorStand(manipulate);
+        verify(manipulate).setCancelled(true);
+    }
+
+    private MetadataValue npcMarker(String ownerName, boolean enabled, Object value) {
+        MetadataValue marker = mock(MetadataValue.class);
+        if (ownerName != null) {
+            Plugin owner = mock(Plugin.class);
+            when(owner.getName()).thenReturn(ownerName);
+            when(owner.isEnabled()).thenReturn(enabled);
+            when(marker.getOwningPlugin()).thenReturn(owner);
+        }
+        when(marker.value()).thenReturn(value);
+        return marker;
     }
 
     private EntityDamageByEntityEvent hit(Entity attacker, Entity target) {
