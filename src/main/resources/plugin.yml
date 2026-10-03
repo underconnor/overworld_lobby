@@ -10,18 +10,11 @@ commands:
   setspawn:
     description: 현재 위치·시선 또는 지정 좌표로 기본 로비 스폰을 저장합니다.
     usage: /setspawn [world x y z [yaw] [pitch]]
-  spawn:
-    description: 로비 스폰으로 이동합니다.
-    usage: /spawn
-    permission: overworld.lobby.spawn
   lobby:
     description: 로비 비행, 월드별 시간·날씨와 보호 설정을 관리합니다.
     usage: /lobby [fly [on|off]|time <값> [월드]|weather <값> [월드]|setspawn [world x y z [yaw] [pitch]]|border|reload|status]
     aliases: [overworldlobby]
 permissions:
-  overworld.lobby.spawn:
-    description: 로비 스폰으로 이동
-    default: true
   overworld.lobby.admin:
     description: 기본 스폰·월드별 시간·날씨·경계 설정, 설정 다시 불러오기와 상태 조회
     default: op

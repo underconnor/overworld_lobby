@@ -49,7 +49,6 @@ public final class OverworldLobby extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new EnvironmentListener(policy), this);
         Objects.requireNonNull(getCommand("lobby")).setExecutor(this);
         Objects.requireNonNull(getCommand("lobby")).setTabCompleter(this);
-        Objects.requireNonNull(getCommand("spawn")).setExecutor(this);
         Objects.requireNonNull(getCommand("setspawn")).setExecutor(this);
         Objects.requireNonNull(getCommand("setspawn")).setTabCompleter(this);
         worlds.start();
@@ -91,18 +90,6 @@ public final class OverworldLobby extends JavaPlugin {
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (command.getName().equalsIgnoreCase("setspawn")) {
             spawnCommands.handle(sender, "lobby", withSetSpawn(args));
-            return true;
-        }
-        if (command.getName().equalsIgnoreCase("spawn")) {
-            if (!sender.hasPermission("overworld.lobby.spawn")) {
-                sender.sendMessage("§c로비 스폰으로 이동할 권한이 없습니다.");
-            } else if (!(sender instanceof Player player)) {
-                sender.sendMessage("플레이어만 사용할 수 있습니다.");
-            } else if (args.length != 0) {
-                sender.sendMessage("§e사용법: /" + label);
-            } else if (!spawn.teleport(player)) {
-                sender.sendMessage("§c스폰 월드나 이동 설정을 확인할 수 없거나 이동이 취소됐습니다.");
-            }
             return true;
         }
         if (worldCommands.handle(sender, label, args)) return true;
