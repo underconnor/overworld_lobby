@@ -5,7 +5,7 @@ public enum Action {
     INTERACT("interact"), CONTAINERS("containers"), ENTITY_INTERACT("entity-interact"),
     ENTITY_DAMAGE("entity-damage"), PVP("pvp"), ITEM_USE("item-use"),
     ITEM_DROP("item-drop"), ITEM_PICKUP("item-pickup"), VEHICLES("vehicles"),
-    PORTALS("portals"), PLAYER_DAMAGE("player-damage"), HUNGER("hunger");
+    PORTALS("portals"), PLAYER_DAMAGE("player-damage"), HUNGER("hunger"), WORLD_BORDER("world-border");
 
     private final String key;
     Action(String key) { this.key = key; }

@@ -261,6 +261,21 @@ class ProtectionListenerTest {
         return event;
     }
 
+    private EntityDamageEvent damage(EntityDamageEvent.DamageCause cause) {
+        EntityDamageEvent event = mock(EntityDamageEvent.class);
+        when(event.getEntity()).thenReturn(player);
+        when(event.getCause()).thenReturn(cause);
+        return event;
+    }
+
+    private void grantBypass(String source, Action individual) {
+        switch (source) {
+            case "OP" -> when(player.isOp()).thenReturn(true);
+            case "GLOBAL" -> when(player.hasPermission("overworld.lobby.bypass")).thenReturn(true);
+            case "INDIVIDUAL" -> when(player.hasPermission(individual.permission())).thenReturn(true);
+        }
+    }
+
     @Test void projectileDamageUsesShootersEntityDamagePermission() {
         Arrow arrow = mock(Arrow.class);
         when(arrow.getShooter()).thenReturn(player);
@@ -319,21 +334,45 @@ class ProtectionListenerTest {
         verify(victim, never()).hasPermission(Action.PLAYER_DAMAGE.permission());
     }
 
-    @Test void environmentalDamageAndPvpPermissionsRemainSeparate() {
-        EntityDamageEvent falling = mock(EntityDamageEvent.class);
-        when(falling.getEntity()).thenReturn(player);
-        listener.onDamage(falling);
-        verify(falling).setCancelled(true);
+    @Test void otherEnvironmentalDamageAndPvpPermissionsRemainSeparate() {
+        EntityDamageEvent fire = damage(EntityDamageEvent.DamageCause.FIRE);
+        listener.onDamage(fire);
+        verify(fire).setCancelled(true);
         when(player.hasPermission(Action.PLAYER_DAMAGE.permission())).thenReturn(true);
-        EntityDamageEvent allowedFall = mock(EntityDamageEvent.class);
-        when(allowedFall.getEntity()).thenReturn(player);
-        listener.onDamage(allowedFall);
-        verify(allowedFall, never()).setCancelled(anyBoolean());
+        EntityDamageEvent allowedFire = damage(EntityDamageEvent.DamageCause.FIRE);
+        listener.onDamage(allowedFire);
+        verify(allowedFire, never()).setCancelled(anyBoolean());
         Player victim = mock(Player.class);
         when(victim.getWorld()).thenReturn(lobby);
         var attack = hit(player, victim);
         listener.onDamage(attack);
         verify(attack).setCancelled(true);
+    }
+
+    @ParameterizedTest @CsvSource({"OP", "GLOBAL", "INDIVIDUAL"})
+    void fallDamageAlwaysBlockedWhileOtherDamageBypassRemainsEffective(String source) {
+        grantBypass(source, Action.PLAYER_DAMAGE);
+        EntityDamageEvent fall = damage(EntityDamageEvent.DamageCause.FALL);
+        listener.onDamage(fall);
+        verify(fall).setCancelled(true);
+        EntityDamageEvent fire = damage(EntityDamageEvent.DamageCause.FIRE);
+        listener.onDamage(fire);
+        verify(fire, never()).setCancelled(anyBoolean());
+    }
+
+    @Test void fallProtectionFollowsPlayerDamageConfigAndProtectedWorldScope() {
+        var fall = damage(EntityDamageEvent.DamageCause.FALL);
+        listener.onDamage(fall);
+        verify(fall).setCancelled(true);
+        var actions = protections(); actions.remove(Action.PLAYER_DAMAGE);
+        settings = settings(Set.of("lobby"), actions);
+        var configuredOff = damage(EntityDamageEvent.DamageCause.FALL);
+        listener.onDamage(configuredOff);
+        verify(configuredOff, never()).setCancelled(anyBoolean());
+        settings = settings(Set.of("outside"), protections());
+        var outside = damage(EntityDamageEvent.DamageCause.FALL);
+        listener.onDamage(outside);
+        verify(outside, never()).setCancelled(anyBoolean());
     }
 
     @Test void hangingRemovalUsesDamageSourcePermissions() {
@@ -398,17 +437,29 @@ class ProtectionListenerTest {
         assertFalse(permitted.isCancelled());
     }
 
-    @Test void hungerHasIndependentBypass() {
+    @ParameterizedTest @CsvSource({"OP", "GLOBAL", "INDIVIDUAL"})
+    void hungerAndSaturationAlwaysProtectedIncludingLegacyHungerNode(String source) {
+        grantBypass(source, Action.HUNGER);
         var hunger = new FoodLevelChangeEvent(player, 19, null);
         listener.onHunger(hunger);
         assertTrue(hunger.isCancelled());
-        when(player.hasPermission(Action.HUNGER.permission())).thenReturn(true);
-        var allowed = new FoodLevelChangeEvent(player, 19, null);
-        listener.onHunger(allowed);
-        assertFalse(allowed.isCancelled());
+        var exhaustion = new EntityExhaustionEvent(player, EntityExhaustionEvent.ExhaustionReason.SPRINT, 0.1f);
+        listener.onExhaustion(exhaustion);
+        assertTrue(exhaustion.isCancelled());
+        var actions = protections(); actions.remove(Action.HUNGER);
+        settings = settings(Set.of("lobby"), actions);
+        var configuredOff = new FoodLevelChangeEvent(player, 19, null);
+        var exhaustionOff = new EntityExhaustionEvent(player, EntityExhaustionEvent.ExhaustionReason.SPRINT, 0.1f);
+        listener.onHunger(configuredOff); listener.onExhaustion(exhaustionOff);
+        assertFalse(configuredOff.isCancelled()); assertFalse(exhaustionOff.isCancelled());
+        settings = settings(Set.of("outside"), protections());
+        var outside = new FoodLevelChangeEvent(player, 19, null);
+        var exhaustionOutside = new EntityExhaustionEvent(player, EntityExhaustionEvent.ExhaustionReason.SPRINT, 0.1f);
+        listener.onHunger(outside); listener.onExhaustion(exhaustionOutside);
+        assertFalse(outside.isCancelled()); assertFalse(exhaustionOutside.isCancelled());
     }
 
-    @Test void exhaustionCannotDrainSaturationAndUsesHungerPermissionIndependently() {
+    @Test void exhaustionCannotDrainSaturationDespiteDamageAndLegacyHungerPermission() {
         var exhaustion = new EntityExhaustionEvent(player,
             EntityExhaustionEvent.ExhaustionReason.SPRINT, 0.1f);
         listener.onExhaustion(exhaustion);
@@ -422,7 +473,7 @@ class ProtectionListenerTest {
         var allowed = new EntityExhaustionEvent(player,
             EntityExhaustionEvent.ExhaustionReason.SPRINT, 0.1f);
         listener.onExhaustion(allowed);
-        assertFalse(allowed.isCancelled());
+        assertTrue(allowed.isCancelled());
     }
 
     @Test void vehicleCreationOnlyRestrictsAttributablePlayerPlacement() {

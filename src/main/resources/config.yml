@@ -6,7 +6,7 @@ players:
   game-mode: SURVIVAL
   allow-flight: true
   fly-speed: 0.1
-  keep-food-full: true # 포만감 20, 포화도 20, 피로도 0 유지
+  keep-food-full: true # OP·우회 사용자도 포만감 20, 포화도 20, 피로도 0 유지
 
 time:
   enabled: true
@@ -19,6 +19,11 @@ weather:
 # 예: lobby: {time: {enabled: true, ticks: 18000}, weather: {enabled: true, kind: RAIN}}
 # 해당 월드의 고정만 해제하려면 time.enabled 또는 weather.enabled를 false로 지정하세요.
 world-settings: {}
+
+# OP·bypass 사용자도 적용받는 보이지 않는 X/Z 사각 경계입니다. 기본은 설정 없음입니다.
+# /lobby border set <x1> <z1> <x2> <z2> [월드] 또는 pos1/pos2로 저장합니다.
+# 예: lobby: {enabled: true, min-x: -100, max-x: 100, min-z: -50, max-z: 50}
+world-borders: {}
 
 spawn:
   enabled: true
@@ -56,9 +61,12 @@ messages:
     item-pickup: '여기서는 아이템을 주울 수 없습니다.'
     vehicles: '여기서는 탈것을 사용할 수 없습니다.'
     portals: '여기서는 포털을 사용할 수 없습니다.'
+    world-border: '이 월드의 경계를 벗어날 수 없습니다.'
 
-# true이면 해당 행동을 막습니다. 기능별 bypass 권한으로 허용할 수 있습니다.
+# true이면 해당 행동을 막습니다. 허기·낙하 피해·월드 경계 보호는 OP·bypass 사용자에게도 적용합니다.
+# 나머지 행동은 기능별 bypass 권한으로 허용할 수 있습니다.
 protection:
+  world-border: true
   block-break: true
   block-place: true
   buckets: true

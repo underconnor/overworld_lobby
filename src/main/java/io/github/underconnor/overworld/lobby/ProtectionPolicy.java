@@ -14,7 +14,8 @@ public final class ProtectionPolicy {
             && !bypasses(player, action);
     }
     public boolean bypasses(Player player, Action action) {
-        if (player == null) return false;
+        // Food/saturation protection applies equally to every protected player.
+        if (player == null || action == Action.HUNGER || action == Action.WORLD_BORDER) return false;
         return hasGlobalBypass(player) || player.hasPermission(action.permission());
     }
     /** OP is an explicit override even when a permission provider returns false for this node. */

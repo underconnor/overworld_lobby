@@ -145,8 +145,9 @@ class PlayerControllerTest {
         assertEquals(GameMode.CREATIVE, mode.get());
         assertTrue(allowFlight.get());
         assertTrue(flying.get());
-        assertEquals(7, food.get());
-        assertEquals(2.5f, saturation.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
+        assertEquals(0f, exhaustion.get());
     }
 
     @Test void shutdownRestoresPriorModeAllowFlightSpeedAndFlyingState() {
@@ -215,7 +216,7 @@ class PlayerControllerTest {
         assertEquals(3f, exhaustion.get());
     }
 
-    @Test void disablingFoodFillOrGrantingHungerBypassRestoresFoodWithoutReleasingMode() {
+    @Test void disablingFoodFillRestoresFoodButLegacyHungerPermissionDoesNotExempt() {
         controller.refresh();
         config.set("players.keep-food-full", false);
         controller.refresh();
@@ -228,8 +229,8 @@ class PlayerControllerTest {
         assertEquals(20, food.get());
         permissions.add("overworld.lobby.bypass.hunger");
         controller.refresh();
-        assertEquals(11, food.get());
-        assertEquals(4f, saturation.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
         assertEquals(GameMode.SURVIVAL, mode.get());
     }
 
@@ -245,7 +246,7 @@ class PlayerControllerTest {
         assertEquals(20, food.get());
     }
 
-    @Test void modeBypassKeepsFoodProtectionButHungerAndGlobalBypassRestoreFood() {
+    @Test void modeHungerAndGlobalBypassAllKeepFoodProtection() {
         mode.set(GameMode.CREATIVE);
         allowFlight.set(true);
         permissions.add("overworld.lobby.bypass.mode");
@@ -259,16 +260,16 @@ class PlayerControllerTest {
         assertEquals(0f, exhaustion.get());
         permissions.add("overworld.lobby.bypass.hunger");
         controller.refresh();
-        assertEquals(7, food.get());
-        assertEquals(2.5f, saturation.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
         permissions.remove("overworld.lobby.bypass.hunger");
         controller.refresh();
         assertEquals(20, food.get());
         permissions.add("overworld.lobby.bypass");
         controller.refresh();
-        assertEquals(7, food.get());
-        assertEquals(2.5f, saturation.get());
-        assertEquals(3f, exhaustion.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
+        assertEquals(0f, exhaustion.get());
     }
 
     @Test void operatorWithDeniedLuckPermsNodeDefaultsToCreativeOnceAfterJoin() {
@@ -280,7 +281,7 @@ class PlayerControllerTest {
         assertEquals(GameMode.SURVIVAL, mode.get());
         assertEquals(1, pendingDefaults.size());
         verify(player, never()).setAllowFlight(anyBoolean());
-        verify(player, never()).setFoodLevel(anyInt());
+        verify(player).setFoodLevel(20);
         pendingDefaults.getFirst().run();
         assertEquals(GameMode.CREATIVE, mode.get());
         PlayerGameModeChangeEvent manual = new PlayerGameModeChangeEvent(player, GameMode.ADVENTURE);
@@ -290,9 +291,9 @@ class PlayerControllerTest {
         controller.refresh();
         assertEquals(GameMode.ADVENTURE, mode.get());
         assertEquals(1, pendingDefaults.size());
-        assertEquals(7, food.get());
-        assertEquals(2.5f, saturation.get());
-        assertEquals(3f, exhaustion.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
+        assertEquals(0f, exhaustion.get());
         assertTrue(controller.toggleFlight(player, true));
     }
 
@@ -335,8 +336,8 @@ class PlayerControllerTest {
         controller.refresh();
         assertEquals(GameMode.ADVENTURE, mode.get());
         assertFalse(allowFlight.get());
-        assertEquals(7, food.get());
-        assertEquals(2.5f, saturation.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
         assertEquals(0.25f, speed.get());
         pendingDefaults.getFirst().run();
         assertEquals(GameMode.CREATIVE, mode.get());
@@ -371,5 +372,35 @@ class PlayerControllerTest {
         assertEquals(7, food.get());
         assertEquals(2.5f, saturation.get());
         assertEquals(3f, exhaustion.get());
+    }
+
+    @Test void operatorSurvivalStillRefillsFoodAndConfigOrWorldExitRestoresOriginalFood() {
+        when(player.isOp()).thenReturn(true);
+        controller.refresh();
+        pendingDefaults.getFirst().run();
+        mode.set(GameMode.SURVIVAL);
+        food.set(6);
+        saturation.set(0f);
+        exhaustion.set(4f);
+        controller.refresh();
+        assertEquals(GameMode.SURVIVAL, mode.get());
+        assertEquals(20, food.get());
+        assertEquals(20f, saturation.get());
+        assertEquals(0f, exhaustion.get());
+        config.set("players.keep-food-full", false);
+        controller.refresh();
+        assertEquals(7, food.get());
+        assertEquals(2.5f, saturation.get());
+        assertEquals(3f, exhaustion.get());
+        assertEquals(GameMode.SURVIVAL, mode.get());
+        config.set("players.keep-food-full", true);
+        controller.refresh();
+        assertEquals(20, food.get());
+        when(player.getWorld()).thenReturn(outside);
+        controller.refresh();
+        assertEquals(7, food.get());
+        assertEquals(2.5f, saturation.get());
+        assertEquals(3f, exhaustion.get());
+        assertEquals(GameMode.SURVIVAL, mode.get());
     }
 }

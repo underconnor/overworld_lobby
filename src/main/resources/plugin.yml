@@ -7,26 +7,29 @@ description: Configurable lobby protection, environment locks and survival fligh
 website: https://github.com/underconnor/overworld_lobby
 softdepend: [LuckPerms, Multiverse-Core]
 commands:
+  setspawn:
+    description: 현재 위치·시선 또는 지정 좌표로 기본 로비 스폰을 저장합니다.
+    usage: /setspawn [world x y z [yaw] [pitch]]
   spawn:
     description: 로비 스폰으로 이동합니다.
     usage: /spawn
     permission: overworld.lobby.spawn
   lobby:
     description: 로비 비행, 월드별 시간·날씨와 보호 설정을 관리합니다.
-    usage: /lobby [fly [on|off]|time <값> [월드]|weather <값> [월드]|reload|status]
+    usage: /lobby [fly [on|off]|time <값> [월드]|weather <값> [월드]|setspawn [world x y z [yaw] [pitch]]|border|reload|status]
     aliases: [overworldlobby]
 permissions:
   overworld.lobby.spawn:
     description: 로비 스폰으로 이동
     default: true
   overworld.lobby.admin:
-    description: 월드별 시간·날씨 설정, 설정 다시 불러오기와 상태 조회
+    description: 기본 스폰·월드별 시간·날씨·경계 설정, 설정 다시 불러오기와 상태 조회
     default: op
   overworld.lobby.fly:
     description: 설정에서 비행을 허용한 로비에서 비행하기
     default: true
   overworld.lobby.bypass:
-    description: 플레이어 보호·게임 모드·비행·허기 제한 전체 우회. OP는 항상 적용
+    description: 플레이어 행동·일반 피해·게임 모드·비행 제한 우회. 포화도·허기·낙하 피해·월드 경계 보호와 자동 스폰은 항상 적용
     default: op
     children:
       overworld.lobby.bypass.mode: true
@@ -44,7 +47,6 @@ permissions:
       overworld.lobby.bypass.vehicles: true
       overworld.lobby.bypass.portals: true
       overworld.lobby.bypass.player-damage: true
-      overworld.lobby.bypass.hunger: true
   overworld.lobby.bypass.mode:
     description: 게임 모드와 비행 상태 강제 변경 우회
     default: false
@@ -75,6 +77,4 @@ permissions:
   overworld.lobby.bypass.portals:
     default: false
   overworld.lobby.bypass.player-damage:
-    default: false
-  overworld.lobby.bypass.hunger:
     default: false

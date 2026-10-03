@@ -31,6 +31,7 @@ public record DenialMessageSettings(boolean enabled, Channel channel, long coold
         denied.put(Action.VEHICLES, "여기서는 탈것을 사용할 수 없습니다.");
         denied.put(Action.PORTALS, "여기서는 포털을 사용할 수 없습니다.");
         denied.put(Action.CONTAINERS, "여기서는 이 상자를 열 수 없습니다.");
+        denied.put(Action.WORLD_BORDER, "이 월드의 경계를 벗어날 수 없습니다.");
         return new DenialMessageSettings(true, Channel.CHAT, 1000, "&c", denied);
     }
 

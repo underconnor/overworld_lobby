@@ -20,6 +20,9 @@ public final class OverworldLobby extends JavaPlugin {
     private PlayerController players;
     private SpawnController spawn;
     private WorldSettingsCommands worldCommands;
+    private SpawnSettingsCommands spawnCommands;
+    private BorderCommands borderCommands;
+    private BorderController borders;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -39,18 +42,25 @@ public final class OverworldLobby extends JavaPlugin {
         players = new PlayerController(this, policy);
         spawn = new SpawnController(this, policy);
         worldCommands = new WorldSettingsCommands(this, () -> settings, this::reloadSettings);
+        spawnCommands = new SpawnSettingsCommands(this, () -> settings, this::reloadSettings);
+        borderCommands = new BorderCommands(this, () -> settings, this::reloadSettings);
+        borders = new BorderController(this, policy, messages);
         getServer().getPluginManager().registerEvents(new ProtectionListener(policy, messages), this);
         getServer().getPluginManager().registerEvents(new EnvironmentListener(policy), this);
         Objects.requireNonNull(getCommand("lobby")).setExecutor(this);
         Objects.requireNonNull(getCommand("lobby")).setTabCompleter(this);
         Objects.requireNonNull(getCommand("spawn")).setExecutor(this);
+        Objects.requireNonNull(getCommand("setspawn")).setExecutor(this);
+        Objects.requireNonNull(getCommand("setspawn")).setTabCompleter(this);
         worlds.start();
         players.start();
         spawn.start();
+        borders.start();
         getLogger().info("로비 보호 활성화. LuckPerms를 포함한 Bukkit 권한 제공자의 권한을 매번 확인합니다.");
     }
 
     @Override public void onDisable() {
+        if (borders != null) borders.close();
         if (spawn != null) spawn.close();
         if (players != null) players.close();
         if (worlds != null) worlds.close();
@@ -73,11 +83,16 @@ public final class OverworldLobby extends JavaPlugin {
         worlds.refresh();
         players.refresh();
         spawn.refresh();
+        borders.refresh();
     }
 
     private record LoadedSettings(Settings protection, DenialMessageSettings messages) { }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("setspawn")) {
+            spawnCommands.handle(sender, "lobby", withSetSpawn(args));
+            return true;
+        }
         if (command.getName().equalsIgnoreCase("spawn")) {
             if (!sender.hasPermission("overworld.lobby.spawn")) {
                 sender.sendMessage("§c로비 스폰으로 이동할 권한이 없습니다.");
@@ -91,6 +106,8 @@ public final class OverworldLobby extends JavaPlugin {
             return true;
         }
         if (worldCommands.handle(sender, label, args)) return true;
+        if (spawnCommands.handle(sender, label, args)) return true;
+        if (borderCommands.handle(sender, label, args)) return true;
         if (args.length == 1 && args[0].equalsIgnoreCase("status")) {
             if (!sender.isOp() && !sender.hasPermission("overworld.lobby.admin")) {
                 sender.sendMessage("§c로비 상태를 확인할 권한이 없습니다.");
@@ -148,6 +165,9 @@ public final class OverworldLobby extends JavaPlugin {
         }
         sender.sendMessage("§e/" + label + " fly [on|off] — 로비 비행 켜기·끄기");
         if (sender.isOp() || sender.hasPermission("overworld.lobby.admin")) {
+            sender.sendMessage("§e/" + label + " setspawn — 현재 위치·시선으로 기본 스폰 저장");
+            sender.sendMessage("§e/" + label + " border set <x1> <z1> <x2> <z2> [월드] — 보이지 않는 사각 경계 저장");
+            sender.sendMessage("§e/" + label + " border <pos1|pos2|off|info> — 코너 선택·해제·조회");
             sender.sendMessage("§e/" + label + " time <day|night|noon|midnight|0..23999|off|default> [월드] — 월드별 시간");
             sender.sendMessage("§e/" + label + " weather <clear|rain|thunder|off|default> [월드] — 월드별 날씨");
             sender.sendMessage("§e/" + label + " reload — 설정 다시 불러오기");
@@ -157,13 +177,28 @@ public final class OverworldLobby extends JavaPlugin {
     }
 
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (command.getName().equalsIgnoreCase("setspawn")) {
+            List<String> suggestions = spawnCommands.complete(sender, withSetSpawn(args));
+            return suggestions == null ? List.of() : suggestions;
+        }
         if (args.length == 1) return (sender.isOp() || sender.hasPermission("overworld.lobby.admin")
-            ? List.of("fly", "time", "weather", "reload", "status") : List.of("fly")).stream()
+            ? List.of("fly", "time", "weather", "setspawn", "border", "reload", "status") : List.of("fly")).stream()
             .filter(value -> value.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         List<String> worldSuggestions = worldCommands.complete(sender, args);
         if (worldSuggestions != null) return worldSuggestions;
+        List<String> spawnSuggestions = spawnCommands.complete(sender, args);
+        if (spawnSuggestions != null) return spawnSuggestions;
+        List<String> borderSuggestions = borderCommands.complete(sender, args);
+        if (borderSuggestions != null) return borderSuggestions;
         if (args.length == 2 && args[0].equalsIgnoreCase("fly"))
             return Arrays.stream(new String[]{"on", "off"}).filter(value -> value.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
         return List.of();
+    }
+
+    private static String[] withSetSpawn(String[] args) {
+        String[] forwarded = new String[args.length + 1];
+        forwarded[0] = "setspawn";
+        System.arraycopy(args, 0, forwarded, 1, args.length);
+        return forwarded;
     }
 }

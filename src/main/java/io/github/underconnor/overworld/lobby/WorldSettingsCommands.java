@@ -177,7 +177,7 @@ public final class WorldSettingsCommands {
             }
         };
     }
-    private static YamlConfiguration read(byte[] contents) throws Exception {
+    static YamlConfiguration read(byte[] contents) throws Exception {
         YamlConfiguration candidate = new YamlConfiguration();
         candidate.options().parseComments(true).pathSeparator('\u0000');
         candidate.loadFromString(StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(contents)).toString());
@@ -207,7 +207,7 @@ public final class WorldSettingsCommands {
         if (overrides.getKeys(false).isEmpty()) candidate.set("world-settings", null);
     }
 
-    private static void writeAtomically(Path target, byte[] contents) throws IOException {
+    static void writeAtomically(Path target, byte[] contents) throws IOException {
         Path temporary = Files.createTempFile(target.toAbsolutePath().getParent(), ".overworld-lobby-", ".tmp");
         try {
             Set<PosixFilePermission> permissions = null;

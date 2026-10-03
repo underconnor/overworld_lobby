@@ -17,12 +17,23 @@ public record Settings(
     boolean enabled, Set<String> worlds, GameMode gameMode, boolean allowFlight,
     float flySpeed, boolean keepFoodFull, TimeSettings time, WeatherSettings weather, SpawnSettings spawn, boolean preventNaturalSpawns,
     Set<Action> protections, Set<EnvironmentRule> environmentRules, Set<Material> allowedContainers,
-    Map<String, WorldSettings> worldSettings
+    Map<String, WorldSettings> worldSettings, Map<String, BorderSettings> worldBorders
 ) {
+    public static final double MAX_HORIZONTAL_COORDINATE = 29_999_984d;
     public enum WeatherKind { CLEAR, RAIN, THUNDER }
     public record TimeSettings(boolean enabled, long ticks) { }
     public record WeatherSettings(boolean enabled, WeatherKind kind) { }
     public record WorldSettings(TimeSettings time, WeatherSettings weather) { }
+    public record BorderSettings(boolean enabled, double minX, double maxX, double minZ, double maxZ) {
+        public BorderSettings {
+            if (!Double.isFinite(minX) || !Double.isFinite(maxX) || !Double.isFinite(minZ) || !Double.isFinite(maxZ)
+                || Math.abs(minX) > MAX_HORIZONTAL_COORDINATE || Math.abs(maxX) > MAX_HORIZONTAL_COORDINATE
+                || Math.abs(minZ) > MAX_HORIZONTAL_COORDINATE || Math.abs(maxZ) > MAX_HORIZONTAL_COORDINATE
+                || minX >= maxX || minZ >= maxZ)
+                throw new IllegalArgumentException("경계는 지원 좌표 범위 안의 유한한 좌표와 양수인 X·Z 너비를 가져야 합니다.");
+        }
+        public boolean contains(double x, double z) { return Double.isFinite(x) && Double.isFinite(z) && x >= minX && x <= maxX && z >= minZ && z <= maxZ; }
+    }
     public record SpawnSettings(boolean enabled, String world, double x, double y, double z,
                                 float yaw, float pitch, boolean onJoin, boolean onRespawn, boolean voidRescue) { }
 
@@ -32,6 +43,16 @@ public record Settings(
         environmentRules = Set.copyOf(environmentRules);
         allowedContainers = Set.copyOf(allowedContainers);
         worldSettings = Map.copyOf(worldSettings);
+        worldBorders = Map.copyOf(worldBorders);
+    }
+
+    public Settings(boolean enabled, Set<String> worlds, GameMode gameMode, boolean allowFlight,
+                    float flySpeed, boolean keepFoodFull, TimeSettings time, WeatherSettings weather,
+                    SpawnSettings spawn, boolean preventNaturalSpawns, Set<Action> protections,
+                    Set<EnvironmentRule> environmentRules, Set<Material> allowedContainers,
+                    Map<String, WorldSettings> worldSettings) {
+        this(enabled, worlds, gameMode, allowFlight, flySpeed, keepFoodFull, time, weather, spawn,
+            preventNaturalSpawns, protections, environmentRules, allowedContainers, worldSettings, Map.of());
     }
 
     public Settings(boolean enabled, Set<String> worlds, GameMode gameMode, boolean allowFlight,
@@ -56,8 +77,10 @@ public record Settings(
         return override == null || override.weather() == null ? weather : override.weather();
     }
 
+    public BorderSettings borderFor(World world) { return world == null ? null : worldBorders.get(world.getName()); }
+
     public static Settings load(FileConfiguration config) {
-        for (String section : java.util.List.of("players", "time", "weather", "spawn", "protection", "environment", "world-settings"))
+        for (String section : java.util.List.of("players", "time", "weather", "spawn", "protection", "environment", "world-settings", "world-borders"))
             if (config.contains(section) && !config.isConfigurationSection(section))
                 throw invalid(section, "설정 항목을 담는 YAML 구역이어야 합니다.");
         Set<String> worlds = new LinkedHashSet<>();
@@ -138,12 +161,25 @@ public record Settings(
             }
             worldSettings.put(worldName, new WorldSettings(worldTime, worldWeather));
         }
+        Map<String, BorderSettings> worldBorders = new LinkedHashMap<>();
+        ConfigurationSection borders = config.getConfigurationSection("world-borders");
+        if (borders != null) for (var entry : borders.getValues(false).entrySet()) {
+            String worldName = entry.getKey();
+            if (worldName.isBlank() || !(entry.getValue() instanceof ConfigurationSection border))
+                throw invalid("world-borders." + worldName, "월드 이름 아래에 경계 설정 구역을 입력하세요.");
+            for (String bound : java.util.List.of("min-x", "max-x", "min-z", "max-z"))
+                if (!border.contains(bound)) throw invalid("world-borders." + worldName + "." + bound, "경계 좌표를 입력하세요.");
+            try {
+                worldBorders.put(worldName, new BorderSettings(bool(border, "enabled", true),
+                    number(border, "min-x", 0), number(border, "max-x", 0), number(border, "min-z", 0), number(border, "max-z", 0)));
+            } catch (IllegalArgumentException error) { throw invalid("world-borders." + worldName, error.getMessage()); }
+        }
         return new Settings(bool(config, "enabled", true), worlds, mode,
             bool(config, "players.allow-flight", true), (float) speed, bool(config, "players.keep-food-full", true),
             globalTime,
             globalWeather,
             spawn,
-            bool(config, "prevent-natural-spawns", true), protections, rules, containers, worldSettings);
+            bool(config, "prevent-natural-spawns", true), protections, rules, containers, worldSettings, worldBorders);
     }
 
     private static boolean isStorage(Material material) {

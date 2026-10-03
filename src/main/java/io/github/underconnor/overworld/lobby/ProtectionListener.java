@@ -241,6 +241,12 @@ public final class ProtectionListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
         Entity victim = event.getEntity();
+        if (victim instanceof Player && event.getCause() == EntityDamageEvent.DamageCause.FALL
+            && policy.protects(victim.getWorld()) && policy.settings().protections().contains(Action.PLAYER_DAMAGE)) {
+            // Landing safely is a common lobby rule, including operators and legacy damage bypasses.
+            event.setCancelled(true);
+            return;
+        }
         Entity direct = event instanceof EntityDamageByEntityEvent byEntity ? byEntity.getDamager() : null;
         Player attacker = responsible(event.getDamageSource(), direct);
         if (victim instanceof Player player) {
