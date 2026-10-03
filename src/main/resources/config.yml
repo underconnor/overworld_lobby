@@ -1,0 +1,86 @@
+# 비어 있으면 이 Paper 서버의 모든 월드를 보호합니다.
+enabled: true
+worlds: []
+
+players:
+  game-mode: SURVIVAL
+  allow-flight: true
+  fly-speed: 0.1
+  keep-food-full: true # 포만감 20, 포화도 20, 피로도 0 유지
+
+time:
+  enabled: true
+  ticks: 6000
+weather:
+  enabled: true
+  kind: CLEAR # CLEAR, RAIN, THUNDER
+
+spawn:
+  enabled: true
+  world: '' # 빈 문자열은 보호 대상인 첫 월드
+  x: -4.5
+  y: 63.5
+  z: -1.5
+  yaw: 180.0
+  pitch: 0.0
+  on-join: true
+  on-respawn: true
+  void-rescue: true
+
+# 자연 생성·번식·스포너 등을 막습니다. 기존 엔티티를 삭제하지 않습니다.
+prevent-natural-spawns: true
+
+# true이면 해당 행동을 막습니다. 기능별 bypass 권한으로 허용할 수 있습니다.
+protection:
+  block-break: true
+  block-place: true
+  buckets: true
+  interact: true
+  containers: false
+  entity-interact: true
+  entity-damage: true
+  pvp: true
+  item-use: true
+  item-drop: true
+  item-pickup: true
+  vehicles: true
+  portals: true
+  player-damage: true
+  hunger: true
+
+# 아래 상자는 열고 안의 아이템을 옮길 수 있습니다. 제작대·화로 등은 interact로 차단합니다.
+allowed-containers:
+  - CHEST
+  - TRAPPED_CHEST
+  - ENDER_CHEST
+  - BARREL
+  - SHULKER_BOX
+  - WHITE_SHULKER_BOX
+  - ORANGE_SHULKER_BOX
+  - MAGENTA_SHULKER_BOX
+  - LIGHT_BLUE_SHULKER_BOX
+  - YELLOW_SHULKER_BOX
+  - LIME_SHULKER_BOX
+  - PINK_SHULKER_BOX
+  - GRAY_SHULKER_BOX
+  - LIGHT_GRAY_SHULKER_BOX
+  - CYAN_SHULKER_BOX
+  - PURPLE_SHULKER_BOX
+  - BLUE_SHULKER_BOX
+  - BROWN_SHULKER_BOX
+  - GREEN_SHULKER_BOX
+  - RED_SHULKER_BOX
+  - BLACK_SHULKER_BOX
+
+# 행위자가 없는 월드 변화는 권한과 무관하게 컨피그로 제어합니다.
+environment:
+  explosions: true
+  fire: true
+  fluid-flow: true
+  block-growth: true
+  block-spread: true
+  leaf-decay: true
+  block-form: true
+  mob-grief: true
+  pistons: true
+  redstone: true

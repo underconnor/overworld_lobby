@@ -1,0 +1,66 @@
+name: OverworldLobby
+version: '${version}'
+main: io.github.underconnor.overworld.lobby.OverworldLobby
+api-version: '26.2'
+author: underconnor
+description: Configurable lobby protection, environment locks and survival flight
+website: https://github.com/underconnor/overworld_lobby
+softdepend: [LuckPerms, Multiverse-Core]
+commands:
+  spawn:
+    description: 로비 스폰으로 이동합니다.
+    usage: /spawn
+    permission: overworld.lobby.spawn
+  lobby:
+    description: 로비 비행과 보호 설정을 관리합니다.
+    usage: /lobby [fly [on|off]|reload]
+    aliases: [overworldlobby]
+permissions:
+  overworld.lobby.spawn:
+    description: 로비 스폰으로 이동
+    default: true
+  overworld.lobby.bypass.spawn:
+    description: 접속·리스폰·공허 추락 시 자동 스폰 이동 우회
+    default: false
+  overworld.lobby.admin:
+    description: 설정 다시 불러오기
+    default: op
+  overworld.lobby.fly:
+    description: 설정에서 비행을 허용한 로비에서 비행하기
+    default: true
+  overworld.lobby.bypass:
+    description: 모든 플레이어 보호와 모드 강제 변경 우회
+    default: false
+  overworld.lobby.bypass.mode:
+    description: 게임 모드와 비행 상태 강제 변경 우회
+    default: false
+  overworld.lobby.bypass.block-break:
+    default: false
+  overworld.lobby.bypass.block-place:
+    default: false
+  overworld.lobby.bypass.buckets:
+    default: false
+  overworld.lobby.bypass.interact:
+    default: false
+  overworld.lobby.bypass.containers:
+    default: false
+  overworld.lobby.bypass.entity-interact:
+    default: false
+  overworld.lobby.bypass.entity-damage:
+    default: false
+  overworld.lobby.bypass.pvp:
+    default: false
+  overworld.lobby.bypass.item-use:
+    default: false
+  overworld.lobby.bypass.item-drop:
+    default: false
+  overworld.lobby.bypass.item-pickup:
+    default: false
+  overworld.lobby.bypass.vehicles:
+    default: false
+  overworld.lobby.bypass.portals:
+    default: false
+  overworld.lobby.bypass.player-damage:
+    default: false
+  overworld.lobby.bypass.hunger:
+    default: false
