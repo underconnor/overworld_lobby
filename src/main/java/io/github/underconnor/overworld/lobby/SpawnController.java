@@ -37,7 +37,7 @@ public final class SpawnController implements Listener, AutoCloseable {
     /** Revalidates a changed configuration without relocating players already in the lobby. */
     public void refresh() { destination(); }
 
-    /** Command permissions are checked by the command handler; automatic bypasses do not disable /spawn. */
+    /** Command permissions are checked by the command handler; automatic positioning has no permission bypass. */
     public boolean teleport(Player player) {
         Location destination = destination();
         if (destination == null || !player.teleport(destination)) return false;
@@ -85,8 +85,7 @@ public final class SpawnController implements Listener, AutoCloseable {
     }
 
     private boolean automaticallyMoves(Player player) {
-        return policy.settings().spawn().enabled() && policy.protects(player.getWorld())
-            && !player.hasPermission("overworld.lobby.bypass.spawn");
+        return policy.settings().spawn().enabled() && policy.protects(player.getWorld());
     }
 
     private Location destination() {

@@ -40,38 +40,46 @@ class ProtectionPolicyTest {
     }
 
     @ParameterizedTest @EnumSource(Action.class)
-    void operatorActivityBypassKeepsFoodAndEnvironmentalDamageProtection(Action action) {
+    void globalBypassAllowsEveryActionIncludingFoodAndPlayerDamage(Action action) {
         var policy = new ProtectionPolicy(() -> Settings.load(new YamlConfiguration()));
         Player operator = mock(Player.class);
         when(operator.hasPermission("overworld.lobby.bypass")).thenReturn(true);
-        boolean keepsProtection = action == Action.HUNGER || action == Action.PLAYER_DAMAGE;
-        assertEquals(!keepsProtection, policy.bypasses(operator, action));
-        if (keepsProtection) {
-            when(operator.hasPermission(action.permission())).thenReturn(true);
-            assertTrue(policy.bypasses(operator, action));
-        }
+        assertTrue(policy.bypasses(operator, action));
+        assertFalse(policy.blocks(action, operator, mock(World.class)));
     }
 
-    @Test void explicitPermissionFalseCanDenyOperatorWithoutHardcodedOpBypass() {
+    @ParameterizedTest @EnumSource(Action.class)
+    void operatorAlwaysBypassesEvenWhenLuckPermsReturnsFalse(Action action) {
         var policy = new ProtectionPolicy(() -> Settings.load(new YamlConfiguration()));
         Player operator = mock(Player.class);
         when(operator.isOp()).thenReturn(true);
         when(operator.hasPermission("overworld.lobby.bypass")).thenReturn(false);
-        assertTrue(policy.blocks(Action.BLOCK_BREAK, operator, mock(World.class)));
-        when(operator.hasPermission(Action.BLOCK_BREAK.permission())).thenReturn(true);
-        assertFalse(policy.blocks(Action.BLOCK_BREAK, operator, mock(World.class)));
-        verify(operator, never()).isOp();
+        assertTrue(policy.hasGlobalBypass(operator));
+        assertTrue(policy.bypasses(operator, action));
+        assertFalse(policy.blocks(action, operator, mock(World.class)));
+        verify(operator, never()).hasPermission(action.permission());
     }
 
-    @Test void pluginDefaultsGiveOperatorsActivityBypassAndKeepSeparateExceptionsExplicit() throws Exception {
+    @Test void pluginDefaultsGiveOperatorsFullBypassAndNeverGrantSpawnExemption() throws Exception {
         var metadata = new YamlConfiguration();
         metadata.options().pathSeparator('/');
         try (var source = new InputStreamReader(getClass().getResourceAsStream("/plugin.yml"), StandardCharsets.UTF_8)) {
             metadata.load(source);
         }
         assertEquals("op", metadata.get("permissions/overworld.lobby.bypass/default"));
-        for (String exception : new String[]{"mode", "spawn", "hunger", "player-damage"}) {
-            assertEquals(false, metadata.get("permissions/overworld.lobby.bypass." + exception + "/default"));
-        }
+        assertEquals(true, metadata.get("permissions/overworld.lobby.bypass/children/overworld.lobby.bypass.mode"));
+        for (Action action : Action.values())
+            assertEquals(true, metadata.get("permissions/overworld.lobby.bypass/children/" + action.permission()));
+        assertFalse(metadata.contains("permissions/overworld.lobby.bypass.spawn"));
+        assertFalse(metadata.contains("permissions/overworld.lobby.bypass/children/overworld.lobby.bypass.spawn"));
+    }
+
+    @Test void explicitIndividualDenialCannotOverrideGlobalBypass() {
+        var policy = new ProtectionPolicy(() -> Settings.load(new YamlConfiguration()));
+        Player player = mock(Player.class);
+        when(player.hasPermission("overworld.lobby.bypass")).thenReturn(true);
+        when(player.hasPermission(Action.PLAYER_DAMAGE.permission())).thenReturn(false);
+        assertFalse(policy.blocks(Action.PLAYER_DAMAGE, player, mock(World.class)));
+        assertFalse(policy.hasGlobalBypass(null));
     }
 }

@@ -1,7 +1,9 @@
 package io.github.underconnor.overworld.lobby;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
@@ -24,8 +26,10 @@ public final class PlayerController implements Listener, AutoCloseable {
     private final ProtectionPolicy policy;
     private final Map<UUID, PlayerState> states = new HashMap<>();
     private final Map<UUID, FoodState> foodStates = new HashMap<>();
+    private final Set<UUID> bypassSessions = new HashSet<>();
     private BukkitTask task;
     private boolean changing;
+    private boolean closed;
 
     public PlayerController(JavaPlugin plugin, ProtectionPolicy policy) {
         this.plugin = plugin;
@@ -34,6 +38,7 @@ public final class PlayerController implements Listener, AutoCloseable {
 
     public void start() {
         if (task != null) return;
+        closed = false;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         refresh();
         task = plugin.getServer().getScheduler().runTaskTimer(plugin, this::refresh, 20L, 20L);
@@ -45,7 +50,8 @@ public final class PlayerController implements Listener, AutoCloseable {
     }
 
     private boolean managed(Player player) {
-        return policy.protects(player.getWorld()) && !player.hasPermission("overworld.lobby.bypass.mode");
+        return policy.protects(player.getWorld()) && !policy.hasGlobalBypass(player)
+            && !player.hasPermission("overworld.lobby.bypass.mode");
     }
 
     private boolean canFly(Player player) {
@@ -57,9 +63,13 @@ public final class PlayerController implements Listener, AutoCloseable {
     }
 
     private void apply(Player player) {
+        boolean globalBypass = policy.hasGlobalBypass(player);
+        if (!globalBypass) bypassSessions.remove(player.getUniqueId());
         applyFood(player);
         if (!managed(player)) {
             releaseMode(player);
+            if (globalBypass && policy.protects(player.getWorld()) && bypassSessions.add(player.getUniqueId()))
+                scheduleBypassDefault(player);
             return;
         }
         PlayerState state = states.computeIfAbsent(player.getUniqueId(), id -> new PlayerState(player));
@@ -81,6 +91,16 @@ public final class PlayerController implements Listener, AutoCloseable {
 
     /** Starts or stops flight while retaining the player's choice during permission refreshes. */
     public boolean toggleFlight(Player player, boolean enabled) {
+        if (policy.protects(player.getWorld()) && policy.hasGlobalBypass(player)) {
+            // Relinquish any earlier managed snapshot before applying the staff's explicit choice.
+            apply(player);
+            boolean allowed = enabled || vanillaFlight(player.getGameMode());
+            if (!enabled && player.isFlying()) player.setFlying(false);
+            if (player.getAllowFlight() != allowed) player.setAllowFlight(allowed);
+            if (player.isFlying() != enabled) player.setFlying(enabled);
+            if (!enabled) player.setFallDistance(0);
+            return true;
+        }
         if (!managed(player) || !canFly(player) || vanillaFlight(policy.settings().gameMode())) return false;
         apply(player);
         states.get(player.getUniqueId()).flightEnabled = enabled;
@@ -90,7 +110,19 @@ public final class PlayerController implements Listener, AutoCloseable {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onJoin(PlayerJoinEvent event) { apply(event.getPlayer()); }
+    public void onJoin(PlayerJoinEvent event) {
+        bypassSessions.remove(event.getPlayer().getUniqueId());
+        apply(event.getPlayer());
+    }
+
+    private void scheduleBypassDefault(Player player) {
+        // Spawn and Multiverse login positioning run first; the staff default is applied once afterwards.
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (closed || !player.isOnline() || !bypassSessions.contains(player.getUniqueId())
+                || !policy.protects(player.getWorld()) || !policy.hasGlobalBypass(player)) return;
+            if (player.getGameMode() != GameMode.CREATIVE) player.setGameMode(GameMode.CREATIVE);
+        }, 2L);
+    }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onWorldChange(PlayerChangedWorldEvent event) { apply(event.getPlayer()); }
@@ -122,6 +154,7 @@ public final class PlayerController implements Listener, AutoCloseable {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
+        bypassSessions.remove(event.getPlayer().getUniqueId());
         restoreFood(event.getPlayer());
         releaseMode(event.getPlayer());
     }
@@ -143,12 +176,14 @@ public final class PlayerController implements Listener, AutoCloseable {
     }
 
     @Override public void close() {
+        closed = true;
         if (task != null) { task.cancel(); task = null; }
         HandlerList.unregisterAll(this);
         for (PlayerState state : java.util.List.copyOf(states.values())) releaseMode(state.player);
         states.clear();
         for (FoodState state : java.util.List.copyOf(foodStates.values())) restoreFood(state.player);
         foodStates.clear();
+        bypassSessions.clear();
     }
 
     private void applyFood(Player player) {

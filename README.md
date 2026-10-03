@@ -18,7 +18,7 @@
 
 | 항목 | 기본값 |
 | --- | --- |
-| 게임 모드 | SURVIVAL |
+| 게임 모드 | 일반 플레이어 SURVIVAL. OP·전체 우회 권한 사용자는 접속 시 CREATIVE |
 | 비행 | 허용. 점프 키 두 번 또는 `/lobby fly` |
 | 스폰 | `-4.5 63.5 -1.5`, yaw `180`, pitch `0` |
 | 자동 스폰 이동 | 접속·리스폰·공허 추락 시 적용 |
@@ -54,21 +54,23 @@
 | --- | --- | --- |
 | `/lobby fly [on\|off]` | `overworld.lobby.fly` | 보호 월드에서 비행 켜기·끄기. 인수 없이 토글 |
 | `/lobby reload` | `overworld.lobby.admin` | 파일을 검증한 뒤 설정 다시 적용 |
+| `/lobby status` | `overworld.lobby.admin` | 현재 접속자의 OP·전체 우회·게임 모드 적용 현황 확인 |
 | `/spawn` | `overworld.lobby.spawn` | 지정한 로비 스폰으로 이동 |
 
-`/overworldlobby` 별칭을 지원합니다. 명령어가 충돌하면 `/overworldlobby:lobby`, `/overworldlobby:spawn`을 사용하세요. `fly`와 `spawn`은 기본으로 모두에게 허용되고, `admin`은 기본 OP 권한입니다. 설정에서 비행을 꺼두면 `fly` 권한만으로 켤 수 없습니다.
+`/overworldlobby` 별칭을 지원합니다. 명령어가 충돌하면 `/overworldlobby:lobby`, `/overworldlobby:spawn`을 사용하세요. `fly`와 `spawn`은 기본으로 모두에게 허용되고, `admin`은 기본 OP 권한입니다. 일반 사용자는 설정에서 비행을 꺼두면 `fly` 권한만으로 켤 수 없습니다. OP·전체 우회 사용자는 설정과 `fly` 권한에 관계없이 비행 명령을 사용할 수 있습니다.
 
 ## LuckPerms 권한 예외
 
 Bukkit의 `Player.hasPermission`으로 검사하므로 LuckPerms의 그룹·유저·월드/서버 컨텍스트와 실시간 권한 변경을 사용합니다. LuckPerms가 없는 환경에서는 Bukkit 기본 권한을 사용합니다.
 
-**OP는 기본적으로 블록·엔티티·아이템 등 행동 제한을 우회합니다.** OP도 설정한 서바이벌·비행·포만감·포화도·환경 피해 보호와 접속 시 스폰 이동은 적용받습니다. 이 동작들은 각각의 예외 권한으로 조정합니다.
+**OP와 `overworld.lobby.bypass` 사용자는 플레이어 행동·피해·허기·모드·비행 제한을 모두 우회합니다.** OP 여부를 직접 확인하므로 LuckPerms가 전체 우회 노드를 `false`로 반환해도 OP는 우회합니다. OP를 제한하려면 OP를 해제한 뒤 필요한 개별 권한만 부여하세요.
+
+OP와 전체 우회 사용자는 접속 시 스폰 이동이 끝난 뒤 크리에이티브로 시작합니다. 이후 직접 선택한 게임 모드는 유지하며, 주기적으로 크리에이티브로 되돌리지 않습니다. 접속 중 전체 우회 권한을 새로 받으면 기존 보호 상태를 복원한 뒤 한 번 크리에이티브를 적용합니다. 스폰 이동은 권한으로 우회하지 않습니다.
 
 | 권한 | 허용하는 행동 |
 | --- | --- |
-| `overworld.lobby.bypass` | 블록·엔티티·아이템 등 행동 제한 우회. OP 기본. 모드·스폰·허기·환경 피해 제외 |
+| `overworld.lobby.bypass` | 플레이어 보호 전체 우회, 접속 시 크리에이티브. OP 항상 적용 |
 | `overworld.lobby.bypass.mode` | 게임 모드·비행 강제 적용 우회 |
-| `overworld.lobby.bypass.spawn` | 접속·리스폰·공허 추락 시 자동 스폰 이동 우회 |
 | `overworld.lobby.bypass.block-break` | 블록 파괴 |
 | `overworld.lobby.bypass.block-place` | 블록·장식·엔티티 설치 |
 | `overworld.lobby.bypass.buckets` | 양동이 사용 |
@@ -94,9 +96,9 @@ lp group builder permission set overworld.lobby.bypass.interact true
 lp user <닉네임> permission set overworld.lobby.bypass true
 ```
 
-OP의 기본 행동 우회를 끄려면 `lp user <닉네임> permission set overworld.lobby.bypass false`를 사용합니다. 개별 행동 권한을 `false`로 지정해도 전체 행동 우회가 `true`이면 해당 행동은 허용되므로, 일부 행동만 허용하려면 전체 우회를 끄고 필요한 개별 권한을 부여하세요.
+개별 행동 권한을 `false`로 지정해도 OP 또는 전체 우회 권한이 있으면 해당 행동을 허용합니다. 일부 행동만 허용하려면 OP를 해제하고 전체 우회 권한을 끈 뒤 필요한 개별 권한만 부여하세요.
 
-크리에이티브 등 게임 모드를 직접 변경할 운영자는 `lp user <닉네임> permission set overworld.lobby.bypass.mode true`를 부여합니다. 접속·리스폰·공허 추락 시 자동 스폰 이동을 제외하려면 `lp user <닉네임> permission set overworld.lobby.bypass.spawn true`를 사용합니다. 이 권한들과 `bypass.hunger`, `bypass.player-damage`는 OP에게도 기본으로 부여하지 않습니다.
+전체 우회 없이 게임 모드와 비행만 직접 변경하려면 `lp user <닉네임> permission set overworld.lobby.bypass.mode true`를 부여합니다. 허기와 환경 피해만 우회할 때는 각각 `bypass.hunger`, `bypass.player-damage`를 사용합니다. 자동 스폰 이동을 제외하는 권한은 없습니다.
 
 PvP는 공격자의 `bypass.pvp` 권한으로 허용합니다. 투사체를 사용하려면 `bypass.item-use`도 필요합니다. 피해자의 `bypass.player-damage`는 환경 피해 제한을 제어합니다.
 
@@ -138,7 +140,7 @@ prevent-natural-spawns: true
 
 `players.keep-food-full`은 `protection.hunger`로 보호받는 플레이어의 포만감·포화도를 채웁니다. 환경 피해는 `protection.player-damage`, PvP는 `protection.pvp`로 제어합니다. 보호 범위를 벗어나면 플러그인이 채우기 전의 음식 상태를 복원합니다.
 
-스폰은 소수 좌표와 시선을 그대로 사용합니다. `spawn.world`가 지정된 경우 이미 로드된 보호 월드여야 하며, 없는 월드를 새로 만들지 않습니다. 자동 이동은 보호받는 출발 월드에서 적용합니다. `bypass.spawn`은 자동 이동만 우회하므로 `/spawn`으로 직접 이동할 수 있습니다. 공허 구조는 월드 최소 높이보다 8블록 아래로 내려갈 때 적용합니다.
+스폰은 소수 좌표와 시선을 그대로 사용합니다. `spawn.world`가 지정된 경우 이미 로드된 보호 월드여야 하며, 없는 월드를 새로 만들지 않습니다. 자동 이동은 보호받는 출발 월드에서 OP·전체 우회 사용자를 포함해 적용합니다. 접속·리스폰·공허 구조는 각각의 설정으로만 끌 수 있고 권한으로 우회하지 않습니다. 공허 구조는 월드 최소 높이보다 8블록 아래로 내려갈 때 적용합니다.
 
 잘못된 타입·게임 모드·날씨·시간·속도·상자 이름은 거부합니다. 잘못된 파일로 `reload`하면 기존 설정을 유지합니다. 비행·게임 모드 적용 전 상태와 플러그인이 바꾼 월드 규칙은 보호 범위를 벗어나거나 정상 비활성화할 때 복원합니다. 월드 자체를 되돌리거나 기존 엔티티·아이템을 지우지는 않습니다.
 

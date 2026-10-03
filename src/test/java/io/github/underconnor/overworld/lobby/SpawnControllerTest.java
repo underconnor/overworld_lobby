@@ -82,7 +82,7 @@ class SpawnControllerTest {
         verify(player).teleport(any(Location.class));
     }
 
-    @Test void respawnUsesExactLocationAndHonorsAutomaticBypass() {
+    @Test void respawnUsesExactLocationDespiteRemovedSpawnBypassPermission() {
         PlayerRespawnEvent event = respawn();
         controller.onRespawn(event);
         ArgumentCaptor<Location> target = ArgumentCaptor.forClass(Location.class);
@@ -91,7 +91,7 @@ class SpawnControllerTest {
         permissions.add("overworld.lobby.bypass.spawn");
         PlayerRespawnEvent bypassed = respawn();
         controller.onRespawn(bypassed);
-        verify(bypassed, never()).setRespawnLocation(any());
+        verify(bypassed).setRespawnLocation(any(Location.class));
     }
 
     @Test void joinsTeleportNextTickAndUseUpdatedConfiguration() {
@@ -110,7 +110,8 @@ class SpawnControllerTest {
         assertEquals(45, target.getValue().getYaw());
     }
 
-    @Test void operatorActivityBypassStillUsesAutomaticJoinAndRespawnSpawn() {
+    @Test void operatorAndGlobalBypassStillUseExactJoinAndRespawnSpawn() {
+        when(player.isOp()).thenReturn(true);
         permissions.add("overworld.lobby.bypass");
         controller.start();
         controller.onJoin(join());
@@ -125,7 +126,10 @@ class SpawnControllerTest {
         permissions.add("overworld.lobby.bypass.spawn");
         PlayerRespawnEvent bypassed = respawn();
         controller.onRespawn(bypassed);
-        verify(bypassed, never()).setRespawnLocation(any());
+        verify(bypassed).setRespawnLocation(any(Location.class));
+        PlayerMoveEvent falling = movement(-73);
+        controller.onVoidMove(falling);
+        assertExact(falling.getTo(), lobby);
     }
 
     @Test void pendingJoinIsSkippedWhenSourceLeavesProtectionOrControllerCloses() {
@@ -151,11 +155,11 @@ class SpawnControllerTest {
         assertEquals(-72, threshold.getTo().getY());
     }
 
-    @Test void voidAndRespawnIgnoreUnprotectedWorldsBypassesAndDisabledOptions() {
+    @Test void voidRescueHasNoPermissionBypassAndStillRespectsScopeAndOptions() {
         permissions.add("overworld.lobby.bypass.spawn");
         PlayerMoveEvent bypassed = movement(-73);
         controller.onVoidMove(bypassed);
-        assertEquals(-73, bypassed.getTo().getY());
+        assertExact(bypassed.getTo(), lobby);
         permissions.clear();
         config.set("spawn.void-rescue", false);
         PlayerMoveEvent disabled = movement(-73);

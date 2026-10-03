@@ -13,15 +13,12 @@ commands:
     permission: overworld.lobby.spawn
   lobby:
     description: 로비 비행과 보호 설정을 관리합니다.
-    usage: /lobby [fly [on|off]|reload]
+    usage: /lobby [fly [on|off]|reload|status]
     aliases: [overworldlobby]
 permissions:
   overworld.lobby.spawn:
     description: 로비 스폰으로 이동
     default: true
-  overworld.lobby.bypass.spawn:
-    description: 접속·리스폰·공허 추락 시 자동 스폰 이동 우회
-    default: false
   overworld.lobby.admin:
     description: 설정 다시 불러오기
     default: op
@@ -29,8 +26,25 @@ permissions:
     description: 설정에서 비행을 허용한 로비에서 비행하기
     default: true
   overworld.lobby.bypass:
-    description: 블록·엔티티·아이템 등 행동 제한 우회
+    description: 플레이어 보호·게임 모드·비행·허기 제한 전체 우회. OP는 항상 적용
     default: op
+    children:
+      overworld.lobby.bypass.mode: true
+      overworld.lobby.bypass.block-break: true
+      overworld.lobby.bypass.block-place: true
+      overworld.lobby.bypass.buckets: true
+      overworld.lobby.bypass.interact: true
+      overworld.lobby.bypass.containers: true
+      overworld.lobby.bypass.entity-interact: true
+      overworld.lobby.bypass.entity-damage: true
+      overworld.lobby.bypass.pvp: true
+      overworld.lobby.bypass.item-use: true
+      overworld.lobby.bypass.item-drop: true
+      overworld.lobby.bypass.item-pickup: true
+      overworld.lobby.bypass.vehicles: true
+      overworld.lobby.bypass.portals: true
+      overworld.lobby.bypass.player-damage: true
+      overworld.lobby.bypass.hunger: true
   overworld.lobby.bypass.mode:
     description: 게임 모드와 비행 상태 강제 변경 우회
     default: false

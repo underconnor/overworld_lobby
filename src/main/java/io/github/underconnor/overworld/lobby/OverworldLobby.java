@@ -15,6 +15,7 @@ public final class OverworldLobby extends JavaPlugin {
     private Settings settings;
     private DenialMessageSettings messageSettings;
     private DenialMessages messages;
+    private ProtectionPolicy policy;
     private WorldController worlds;
     private PlayerController players;
     private SpawnController spawn;
@@ -31,7 +32,7 @@ public final class OverworldLobby extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
-        ProtectionPolicy policy = new ProtectionPolicy(() -> settings);
+        policy = new ProtectionPolicy(() -> settings);
         messages = new DenialMessages(() -> messageSettings);
         worlds = new WorldController(this, () -> settings);
         players = new PlayerController(this, policy);
@@ -75,8 +76,27 @@ public final class OverworldLobby extends JavaPlugin {
             }
             return true;
         }
+        if (args.length == 1 && args[0].equalsIgnoreCase("status")) {
+            if (!sender.isOp() && !sender.hasPermission("overworld.lobby.admin")) {
+                sender.sendMessage("§c로비 상태를 확인할 권한이 없습니다.");
+                return true;
+            }
+            int online = 0, operators = 0, permissionBypass = 0, effectiveBypass = 0, creative = 0, survival = 0;
+            for (Player player : getServer().getOnlinePlayers()) {
+                online++;
+                if (player.isOp()) operators++;
+                if (player.hasPermission("overworld.lobby.bypass")) permissionBypass++;
+                if (policy.hasGlobalBypass(player)) effectiveBypass++;
+                if (player.getGameMode() == org.bukkit.GameMode.CREATIVE) creative++;
+                if (player.getGameMode() == org.bukkit.GameMode.SURVIVAL) survival++;
+            }
+            sender.sendMessage("OverworldLobby " + getPluginMeta().getVersion() + " online=" + online
+                + " op=" + operators + " permission-bypass=" + permissionBypass + " effective-bypass=" + effectiveBypass
+                + " creative=" + creative + " survival=" + survival);
+            return true;
+        }
         if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
-            if (!sender.hasPermission("overworld.lobby.admin")) {
+            if (!sender.isOp() && !sender.hasPermission("overworld.lobby.admin")) {
                 sender.sendMessage("§c설정을 다시 불러올 권한이 없습니다.");
                 return true;
             }
@@ -104,8 +124,8 @@ public final class OverworldLobby extends JavaPlugin {
                 sender.sendMessage("§e사용법: /" + label + " fly [on|off]");
                 return true;
             }
-            if (!settings.protects(player.getWorld()) || !settings.allowFlight()
-                || !player.hasPermission("overworld.lobby.fly")) {
+            if (!settings.protects(player.getWorld()) || (!policy.hasGlobalBypass(player)
+                && (!settings.allowFlight() || !player.hasPermission("overworld.lobby.fly")))) {
                 sender.sendMessage("§c이 월드에서는 로비 비행을 사용할 수 없습니다.");
                 return true;
             }
@@ -118,13 +138,16 @@ public final class OverworldLobby extends JavaPlugin {
             return true;
         }
         sender.sendMessage("§e/" + label + " fly [on|off] — 로비 비행 켜기·끄기");
-        if (sender.hasPermission("overworld.lobby.admin")) sender.sendMessage("§e/" + label + " reload — 설정 다시 불러오기");
+        if (sender.isOp() || sender.hasPermission("overworld.lobby.admin")) {
+            sender.sendMessage("§e/" + label + " reload — 설정 다시 불러오기");
+            sender.sendMessage("§e/" + label + " status — 접속자의 OP·우회·게임 모드 집계");
+        }
         return true;
     }
 
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1) return (sender.hasPermission("overworld.lobby.admin")
-            ? List.of("fly", "reload") : List.of("fly")).stream()
+        if (args.length == 1) return (sender.isOp() || sender.hasPermission("overworld.lobby.admin")
+            ? List.of("fly", "reload", "status") : List.of("fly")).stream()
             .filter(value -> value.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         if (args.length == 2 && args[0].equalsIgnoreCase("fly"))
             return Arrays.stream(new String[]{"on", "off"}).filter(value -> value.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
