@@ -71,7 +71,7 @@ OP과 전체 우회 권한을 가진 일반 사용자에게 블록 파괴·설�
 
 ## 읽기 전용 상태 명령
 
-`/lobby status`의 콘솔·관리 권한·OP 호출과 일반 사용자 거부를 확인했다. 격리 서버의 실제 접속자 목록은 비어 있으며 `online=0 op=0 permission-bypass=0 effective-bypass=0 creative=0 survival=0` 집계가 일치했다. 일반 사용자에게는 집계를 공개하지 않고 자동 완성에서도 명령을 제외한다. 합성 플레이어를 실제 접속자 목록에 넣지 않았으므로 접속자가 있는 운영 집계는 별도 운영 확인이 필요하다.
+`/lobby status`의 콘솔·관리 권한·OP 호출과 일반 사용자 거부를 확인했다. 격리 서버의 실제 접속자 목록은 비어 있으며 `online=0 op=0 permission-bypass=0 effective-bypass=0 creative=0 survival=0` 집계가 일치했다. 일반 사용자에게는 집계를 공개하지 않고 자동 완성에서도 명령을 제외한다. 합성 플레이어는 실제 접속자 목록에 넣지 않았다. 접속자가 있는 운영 집계는 아래 1.0.2 운영 적용 절에서 구분했다.
 
 ## 차단 안내와 설정 재적용
 
@@ -115,6 +115,21 @@ OP과 전체 우회 권한을 가진 일반 사용자에게 블록 파괴·설�
 - 기존 월드 식별 정보, 컨테이너 이미지·마운트·Compose 구성, 접속 정책·OP·화이트리스트, 기존 플러그인 JAR, LuckPerms 설정과 로비 외 컨테이너 7개의 상태가 보존됐다. 배포 대상에 LuckPerms 저장소 변경은 포함하지 않았다.
 
 운영 점검은 설치 파일·설정·권한 기본값·월드 상태 확인까지 수행했다. 실제 접속자의 권한이나 상태를 변경하거나 Minecraft 클라이언트로 행동과 안내 표시를 검증하지 않았다. 로그인 등으로 변할 수 있는 LuckPerms 저장소 전체의 바이트 일치는 주장하지 않는다.
+
+## 1.0.2 릴리즈와 운영 적용
+
+2026-10-03 KST에 [v1.0.2 릴리즈](https://github.com/underconnor/overworld_lobby/releases/tag/v1.0.2)를 게시했다. [Build](https://github.com/underconnor/overworld_lobby/actions/runs/37114434315)와 [Release](https://github.com/underconnor/overworld_lobby/actions/runs/37114447809)가 [커밋 59e7d443](https://github.com/underconnor/overworld_lobby/commit/59e7d443832486a63df1ebe62656f9d41ed23e5a)에서 성공했다. 공개 JAR는 66,246바이트이며, 내려받은 릴리즈·격리 Paper 검증·운영 설치 파일의 SHA-256이 모두 `2f9f92f6026ac85251af492e8a9b6316d88d55be77de941a4ea1d0f5aa824827`로 일치했다.
+
+로비를 정상 종료하고 217,475,557바이트 백업을 만든 뒤 로비에만 적용했다. 백업 SHA-256은 `451ee10bcf90bd210fdfd9a7f88117ad12bdac28d39e2c701885d63281d3dc56`이다. 기존 설치 경로의 JAR를 교체했고 기존 로비 설정과 Multiverse 설정은 보존됐다.
+
+별도 읽기 전용 재점검의 28개 항목이 모두 통과했다.
+
+- OverworldLobby 1.0.2를 포함한 로비 플러그인 7개가 로드됐으며 점검 대상 서비스 7개가 정상 상태였다. 기동 호환성·작업·이벤트 예외와 플러그인 비활성화는 없었다.
+- 실제 운영 `/lobby status` 응답은 `OverworldLobby 1.0.2 online=1 op=1 permission-bypass=1 effective-bypass=1 creative=1 survival=0`이었다. 실제 접속자 1명의 서버 OP 상태·전체 우회 노드·유효 우회와 크리에이티브 상태를 확인했다.
+- 설치된 전체 우회 권한의 하위 노드, 승인된 차단 안내, 일반 사용자용 서바이벌·비행·음식·피해 보호 설정을 확인했다. 정확한 공통 스폰과 접속·리스폰 이동·공허 복구 설정도 유지됐다. 실제 월드 시간 6000틱과 자연 스폰·시간 진행·날씨 진행 고정을 확인했다.
+- 기존 월드 식별 정보, 컨테이너 이미지·마운트·Compose 구성, 접속 정책·OP·화이트리스트, 기존 플러그인 JAR, LuckPerms 설정과 로비 외 컨테이너 7개의 상태가 보존됐다. 배포 대상에 LuckPerms 저장소 변경은 포함하지 않았다.
+
+운영 접속자의 권한·역할·게임 모드를 점검 명령으로 변경하지 않고 서버 상태를 읽어 확인했다. 실제 클라이언트에서 블록 조작, `/lobby fly`, 접속 시 스폰 이동과 차단 안내 표시를 직접 수행한 검증은 하지 않았다.
 
 ## 검증 범위
 
