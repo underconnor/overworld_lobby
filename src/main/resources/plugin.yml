@@ -41,7 +41,7 @@ permissions:
       overworld.lobby.bypass.portals: true
       overworld.lobby.bypass.player-damage: true
   overworld.lobby.bypass.mode:
-    description: 게임 모드와 비행 상태 강제 변경 우회
+    description: 게임 모드 강제 변경 우회
     default: false
   overworld.lobby.bypass.block-break:
     default: false

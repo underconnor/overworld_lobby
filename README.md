@@ -67,7 +67,7 @@ Citizens NPC 우클릭은 일반 사용자도 허용하며 엔티티 조작 차�
 | `/lobby border pos1\|pos2 [x z] [월드]` | OP 또는 `overworld.lobby.admin` | 첫째·둘째 코너 선택. 좌표를 생략하면 현재 위치 사용; pos2에서 저장 |
 | `/lobby border off\|info [월드]` | OP 또는 `overworld.lobby.admin` | 해당 월드의 경계 해제·설정 조회 |
 
-`/overworldlobby` 별칭을 지원합니다. 명령어가 충돌하면 `/overworldlobby:lobby`, `/overworldlobby:spawn`을 사용하세요. `fly`와 `spawn`은 기본으로 모두에게 허용되고, `admin`은 기본 OP 권한입니다. 일반 사용자는 설정에서 비행을 꺼두면 `fly` 권한만으로 켤 수 없습니다. OP·전체 우회 사용자는 설정과 `fly` 권한에 관계없이 비행 명령을 사용할 수 있습니다.
+`/overworldlobby` 별칭을 지원합니다. 명령어가 충돌하면 `/overworldlobby:lobby`를 사용하세요. `fly`는 기본으로 모두에게 허용되고, `admin`은 기본 OP 권한입니다. 일반 사용자는 설정에서 비행을 꺼두면 `fly` 권한만으로 켤 수 없습니다. OP·전체 우회 사용자는 설정과 `fly` 권한에 관계없이 비행 명령을 사용할 수 있습니다. 보호 월드에서는 게임 모드를 바꾸거나 리스폰한 뒤에도 비행 허용 상태를 복구하며, `/lobby fly off`로 끈 선택은 유지합니다. `bypass.mode`만 가진 사용자는 게임 모드를 유지하면서 설정과 `fly` 권한에 따라 비행을 사용할 수 있습니다. 실제 비행 시작은 점프 키 두 번 또는 비행 명령으로 선택합니다.
 
 게임 안에서 월드를 생략하면 현재 있는 월드를 설정합니다. 콘솔에서는 월드 이름을 반드시 지정합니다. 보호 대상으로 이미 로드된 월드만 설정하며, 다른 월드의 시간·날씨는 유지합니다. `off`는 그 월드의 해당 고정을 해제해 원래 진행 상태를 복원하고, `default`는 해당 월드의 예외를 지워 공통 설정을 다시 따릅니다. 시간과 날씨는 각각 독립적으로 설정합니다. 변경은 즉시 적용하고 `config.yml`에 저장하므로 서버 재시작 후에도 유지됩니다.
 
@@ -95,6 +95,8 @@ Citizens NPC 우클릭은 일반 사용자도 허용하며 엔티티 조작 차�
 /lobby border off lobby
 ```
 
+Multiverse-Core를 함께 사용하면 `config.yml`의 `world.enforce-flight: false`로 비행 관리를 이 플러그인에 맡기세요. 월드별 `allow-flight: false`를 강제로 적용하면 접속·월드 이동 직후 비행이 꺼질 수 있습니다. `server.properties`의 `allow-flight=true`는 비행 중 추방 방지용 설정이며 비행 권한을 직접 부여하지 않습니다.
+
 ## LuckPerms 권한 예외
 
 Bukkit의 `Player.hasPermission`으로 검사하므로 LuckPerms의 그룹·유저·월드/서버 컨텍스트와 실시간 권한 변경을 사용합니다. LuckPerms가 없는 환경에서는 Bukkit 기본 권한을 사용합니다.
@@ -106,7 +108,7 @@ OP와 전체 우회 사용자는 접속 시 스폰 이동이 끝난 뒤 크리�
 | 권한 | 허용하는 행동 |
 | --- | --- |
 | `overworld.lobby.bypass` | 행동·일반 피해·모드·비행 우회, 접속 시 크리에이티브. 허기·낙하·경계·스폰 보호 적용 |
-| `overworld.lobby.bypass.mode` | 게임 모드·비행 강제 적용 우회 |
+| `overworld.lobby.bypass.mode` | 게임 모드 강제 적용 우회 |
 | `overworld.lobby.bypass.block-break` | 블록 파괴 |
 | `overworld.lobby.bypass.block-place` | 블록·장식·엔티티 설치 |
 | `overworld.lobby.bypass.buckets` | 양동이 사용 |
@@ -133,7 +135,7 @@ lp user <닉네임> permission set overworld.lobby.bypass true
 
 개별 행동 권한을 `false`로 지정해도 OP 또는 전체 우회 권한이 있으면 해당 행동을 허용합니다. 일부 행동만 허용하려면 OP를 해제하고 전체 우회 권한을 끈 뒤 필요한 개별 권한만 부여하세요.
 
-전체 우회 없이 게임 모드와 비행만 직접 변경하려면 `lp user <닉네임> permission set overworld.lobby.bypass.mode true`를 부여합니다. 낙하 이외의 환경 피해는 `bypass.player-damage`로 우회합니다. 기존 `bypass.hunger` 권한은 더 이상 사용하지 않으며, 이미 부여돼 있어도 허기·포화도 보호를 해제하지 않습니다. 허기·낙하·경계·자동 스폰 보호를 제외하는 권한은 없습니다.
+전체 우회 없이 게임 모드를 직접 변경하려면 `lp user <닉네임> permission set overworld.lobby.bypass.mode true`를 부여합니다. 낙하 이외의 환경 피해는 `bypass.player-damage`로 우회합니다. 기존 `bypass.hunger` 권한은 더 이상 사용하지 않으며, 이미 부여돼 있어도 허기·포화도 보호를 해제하지 않습니다. 허기·낙하·경계·자동 스폰 보호를 제외하는 권한은 없습니다.
 
 PvP는 공격자의 `bypass.pvp` 권한으로 허용합니다. 투사체를 사용하려면 `bypass.item-use`도 필요합니다. 피해자의 `bypass.player-damage`는 환경 피해 제한을 제어합니다.
 

@@ -25,6 +25,7 @@ public final class PlayerController implements Listener, AutoCloseable {
     private final JavaPlugin plugin;
     private final ProtectionPolicy policy;
     private final Map<UUID, PlayerState> states = new HashMap<>();
+    private final Map<UUID, FlightState> flightStates = new HashMap<>();
     private final Map<UUID, FoodState> foodStates = new HashMap<>();
     private final Set<UUID> bypassSessions = new HashSet<>();
     private BukkitTask task;
@@ -68,44 +69,49 @@ public final class PlayerController implements Listener, AutoCloseable {
         applyFood(player);
         if (!managed(player)) {
             releaseMode(player);
-            if (globalBypass && policy.protects(player.getWorld()) && bypassSessions.add(player.getUniqueId()))
+            if (!policy.protects(player.getWorld())) {
+                releaseFlight(player);
+                return;
+            }
+            FlightState previous = flightStates.get(player.getUniqueId());
+            if (previous != null && previous.globalBypass != globalBypass) releaseFlight(player);
+            FlightState state = flightStates.computeIfAbsent(player.getUniqueId(), id -> new FlightState(player, globalBypass));
+            applyFlight(player, vanillaFlight(player.getGameMode()) || ((globalBypass || canFly(player)) && state.flightEnabled));
+            if (globalBypass && bypassSessions.add(player.getUniqueId()))
                 scheduleBypassDefault(player);
             return;
         }
+        releaseFlight(player);
         PlayerState state = states.computeIfAbsent(player.getUniqueId(), id -> new PlayerState(player));
         Settings current = policy.settings();
         changing = true;
         try {
             if (player.getGameMode() != current.gameMode()) player.setGameMode(current.gameMode());
-            boolean allowed = vanillaFlight(current.gameMode()) || (canFly(player) && state.flightEnabled);
-            if (!allowed && player.isFlying()) {
-                player.setFlying(false);
-                player.setFallDistance(0);
-            }
-            if (player.getAllowFlight() != allowed) player.setAllowFlight(allowed);
+            applyFlight(player, vanillaFlight(player.getGameMode()) || (canFly(player) && state.flightEnabled));
             if (player.getFlySpeed() != current.flySpeed()) player.setFlySpeed(current.flySpeed());
         } finally {
             changing = false;
         }
     }
 
+    private void applyFlight(Player player, boolean allowed) {
+        if (!allowed && player.isFlying()) {
+            player.setFlying(false);
+            player.setFallDistance(0);
+        }
+        if (player.getAllowFlight() != allowed) player.setAllowFlight(allowed);
+    }
+
     /** Starts or stops flight while retaining the player's choice during permission refreshes. */
     public boolean toggleFlight(Player player, boolean enabled) {
-        if (policy.protects(player.getWorld()) && policy.hasGlobalBypass(player)) {
-            // Relinquish any earlier managed snapshot before applying the staff's explicit choice.
-            apply(player);
-            boolean allowed = enabled || vanillaFlight(player.getGameMode());
-            if (!enabled && player.isFlying()) player.setFlying(false);
-            if (player.getAllowFlight() != allowed) player.setAllowFlight(allowed);
-            if (player.isFlying() != enabled) player.setFlying(enabled);
-            if (!enabled) player.setFallDistance(0);
-            return true;
-        }
-        if (!managed(player) || !canFly(player) || vanillaFlight(policy.settings().gameMode())) return false;
+        if (!policy.protects(player.getWorld()) || (!policy.hasGlobalBypass(player) && !canFly(player))
+            || (managed(player) && vanillaFlight(policy.settings().gameMode()))) return false;
         apply(player);
-        states.get(player.getUniqueId()).flightEnabled = enabled;
+        if (managed(player)) states.get(player.getUniqueId()).flightEnabled = enabled;
+        else flightStates.get(player.getUniqueId()).flightEnabled = enabled;
         apply(player);
         if (player.isFlying() != enabled) player.setFlying(enabled);
+        if (!enabled) player.setFallDistance(0);
         return true;
     }
 
@@ -113,6 +119,7 @@ public final class PlayerController implements Listener, AutoCloseable {
     public void onJoin(PlayerJoinEvent event) {
         bypassSessions.remove(event.getPlayer().getUniqueId());
         apply(event.getPlayer());
+        scheduleApply(event.getPlayer());
     }
 
     private void scheduleBypassDefault(Player player) {
@@ -121,32 +128,47 @@ public final class PlayerController implements Listener, AutoCloseable {
             if (closed || !player.isOnline() || !bypassSessions.contains(player.getUniqueId())
                 || !policy.protects(player.getWorld()) || !policy.hasGlobalBypass(player)) return;
             if (player.getGameMode() != GameMode.CREATIVE) player.setGameMode(GameMode.CREATIVE);
+            apply(player);
         }, 2L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    public void onWorldChange(PlayerChangedWorldEvent event) { apply(event.getPlayer()); }
+    public void onWorldChange(PlayerChangedWorldEvent event) {
+        apply(event.getPlayer());
+        scheduleApply(event.getPlayer());
+    }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onRespawn(PlayerRespawnEvent event) {
         // Respawn finishes after the event and may replace the player's vanilla flight flags.
+        scheduleApply(event.getPlayer());
+    }
+
+    private void scheduleApply(Player player) {
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (event.getPlayer().isOnline()) apply(event.getPlayer());
+            if (!closed && player.isOnline()) apply(player);
         });
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onGameModeChange(PlayerGameModeChangeEvent event) {
-        if (!changing && managed(event.getPlayer()) && event.getNewGameMode() != policy.settings().gameMode())
+        if (changing) return;
+        if (managed(event.getPlayer()) && event.getNewGameMode() != policy.settings().gameMode()) {
             event.setCancelled(true);
+            return;
+        }
+        // Bukkit applies vanilla abilities after this event, so repair only on the following tick.
+        if (policy.protects(event.getPlayer().getWorld())) scheduleApply(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onToggleFlight(PlayerToggleFlightEvent event) {
         Player player = event.getPlayer();
-        if (!managed(player) || vanillaFlight(policy.settings().gameMode()) || !event.isFlying()) return;
+        if (!policy.protects(player.getWorld()) || vanillaFlight(player.getGameMode()) || !event.isFlying()) return;
         PlayerState state = states.get(player.getUniqueId());
-        if (!canFly(player) || (state != null && !state.flightEnabled)) {
+        FlightState bypassed = flightStates.get(player.getUniqueId());
+        if ((!policy.hasGlobalBypass(player) && !canFly(player)) || (state != null && !state.flightEnabled)
+            || (bypassed != null && !bypassed.flightEnabled)) {
             event.setCancelled(true);
             apply(player);
         }
@@ -157,6 +179,17 @@ public final class PlayerController implements Listener, AutoCloseable {
         bypassSessions.remove(event.getPlayer().getUniqueId());
         restoreFood(event.getPlayer());
         releaseMode(event.getPlayer());
+        releaseFlight(event.getPlayer());
+    }
+
+    private void releaseFlight(Player player) {
+        FlightState state = flightStates.remove(player.getUniqueId());
+        if (state == null) return;
+        boolean allowed = vanillaFlight(player.getGameMode()) || (!vanillaFlight(state.mode) && state.allowFlight);
+        if (player.isFlying()) player.setFlying(false);
+        if (player.getAllowFlight() != allowed) player.setAllowFlight(allowed);
+        if (state.flying && allowed) player.setFlying(true);
+        player.setFallDistance(0);
     }
 
     private void releaseMode(Player player) {
@@ -181,6 +214,8 @@ public final class PlayerController implements Listener, AutoCloseable {
         HandlerList.unregisterAll(this);
         for (PlayerState state : java.util.List.copyOf(states.values())) releaseMode(state.player);
         states.clear();
+        for (FlightState state : java.util.List.copyOf(flightStates.values())) releaseFlight(state.player);
+        flightStates.clear();
         for (FoodState state : java.util.List.copyOf(foodStates.values())) restoreFood(state.player);
         foodStates.clear();
         bypassSessions.clear();
@@ -220,4 +255,19 @@ public final class PlayerController implements Listener, AutoCloseable {
         }
     }
     private record FoodState(Player player, int level, float saturation, float exhaustion) { }
+    private static final class FlightState {
+        final Player player;
+        final GameMode mode;
+        final boolean allowFlight;
+        final boolean flying;
+        final boolean globalBypass;
+        boolean flightEnabled = true;
+        FlightState(Player player, boolean globalBypass) {
+            this.player = player;
+            mode = player.getGameMode();
+            allowFlight = player.getAllowFlight();
+            flying = player.isFlying();
+            this.globalBypass = globalBypass;
+        }
+    }
 }
